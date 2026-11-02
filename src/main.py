@@ -3,6 +3,7 @@
 from src.tasks import TaskManager
 from src.analytics import ProductivityAnalytics
 from src.reports import ProductivityReports
+from src.task_filters import filter_tasks
 
 
 def build_parser():
@@ -18,7 +19,18 @@ def build_parser():
     add.add_argument("--description", default="")
     add.add_argument("--due-date")
 
-    commands.add_parser("list", help="List all tasks")
+    list_parser = commands.add_parser("list", help="List and filter tasks")
+    list_parser.add_argument("--search")
+    list_parser.add_argument("--priority", choices=["low", "medium", "high"])
+    list_parser.add_argument("--category")
+    list_parser.add_argument("--status", choices=["pending", "completed"])
+    list_parser.add_argument(
+        "--sort",
+        choices=["title", "priority", "category", "created_at", "due_date"],
+        default="created_at"
+    )
+    list_parser.add_argument("--ascending", action="store_true")
+
     commands.add_parser("stats", help="Show productivity statistics")
 
     complete = commands.add_parser("complete", help="Complete a task")
@@ -50,9 +62,18 @@ def main():
         print(f"Task created successfully. ID: {task.task_id}")
 
     elif args.command == "list":
-        tasks = manager.get_all_tasks()
+        tasks = filter_tasks(
+            manager.get_all_tasks(),
+            keyword=args.search,
+            priority=args.priority,
+            category=args.category,
+            status=args.status,
+            sort_by=args.sort,
+            descending=not args.ascending
+        )
+
         if not tasks:
-            print("No tasks found.")
+            print("No matching tasks found.")
             return
 
         for task in tasks:
@@ -63,16 +84,16 @@ def main():
             )
 
     elif args.command == "complete":
-        if manager.complete_task(args.task_id):
-            print("Task completed.")
-        else:
-            print("Task not found.")
+        print(
+            "Task completed." if manager.complete_task(args.task_id)
+            else "Task not found."
+        )
 
     elif args.command == "delete":
-        if manager.delete_task(args.task_id):
-            print("Task deleted.")
-        else:
-            print("Task not found.")
+        print(
+            "Task deleted." if manager.delete_task(args.task_id)
+            else "Task not found."
+        )
 
     elif args.command == "stats":
         analytics = ProductivityAnalytics(manager.database)
@@ -80,8 +101,7 @@ def main():
 
     elif args.command == "report":
         reports = ProductivityReports(manager.database)
-        path = reports.export_report(args.output)
-        print(f"Report exported to: {path}")
+        print(f"Report exported to: {reports.export_report(args.output)}")
 
 
 if __name__ == "__main__":
