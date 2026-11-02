@@ -22,30 +22,24 @@ def filter_tasks(
         ]
 
     if priority:
-        result = [
-            task for task in result
-            if task.priority.casefold() == priority.casefold()
-        ]
+        result = [t for t in result if t.priority.casefold() == priority.casefold()]
 
     if category:
-        result = [
-            task for task in result
-            if task.category.casefold() == category.casefold()
-        ]
+        result = [t for t in result if t.category.casefold() == category.casefold()]
 
     if status == "completed":
-        result = [task for task in result if task.completed]
+        result = [t for t in result if t.completed]
     elif status == "pending":
-        result = [task for task in result if not task.completed]
+        result = [t for t in result if not t.completed]
     elif status is not None:
         raise ValueError("Status must be completed or pending.")
 
     sort_fields = {
-        "title": lambda task: task.title.casefold(),
-        "priority": lambda task: task.priority.casefold(),
-        "category": lambda task: task.category.casefold(),
-        "created_at": lambda task: task.created_at,
-        "due_date": lambda task: task.due_date or "9999-12-31"
+        "title": lambda t: t.title.casefold(),
+        "priority": lambda t: t.priority.casefold(),
+        "category": lambda t: t.category.casefold(),
+        "created_at": lambda t: t.created_at,
+        "due_date": lambda t: t.due_date or "9999-12-31"
     }
 
     if sort_by not in sort_fields:
