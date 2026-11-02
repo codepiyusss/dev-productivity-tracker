@@ -6,6 +6,7 @@ from src.analytics import ProductivityAnalytics
 from src.reports import ProductivityReports
 from src.task_filters import filter_tasks
 from src.journal import ProductivityJournal
+from datetime import date, timedelta
 
 
 def build_parser():
@@ -75,7 +76,16 @@ def build_parser():
 
     journal_delete = journal_commands.add_parser("delete", help="Delete journal entry")
     journal_delete.add_argument("entry_date")
-
+    reminders = commands.add_parser(
+        "reminders",
+        help="Show overdue tasks and upcoming due dates"
+    )
+    reminders.add_argument(
+        "--days",
+        type=int,
+        default=7,
+        help="Show tasks due within the next N days"
+    )
     return parser
 
 
@@ -147,6 +157,47 @@ def handle_journal(args):
         deleted = journal.delete_entry(args.entry_date)
         print("Journal entry deleted." if deleted else "Journal entry not found.")
 
+def show_reminders(manager, days=7):
+    if days < 0:
+        print("Days cannot be negative.")
+        return
+
+    today = date.today()
+    deadline = today + timedelta(days=days)
+
+    overdue = []
+    upcoming = []
+
+    for task in manager.get_all_tasks():
+        if task.completed or not task.due_date:
+            continue
+
+        try:
+            due_date = date.fromisoformat(str(task.due_date))
+        except ValueError:
+            continue
+
+        if due_date < today:
+            overdue.append((task, due_date))
+        elif due_date <= deadline:
+            upcoming.append((task, due_date))
+
+    print("\n=== OVERDUE TASKS ===")
+
+    if overdue:
+        for task, due_date in sorted(overdue, key=lambda item: item[1]):
+            print(f"[{task.task_id}] {task.title} | Due: {due_date}")
+    else:
+        print("No overdue tasks.")
+
+    print(f"\n=== DUE WITHIN {days} DAYS ===")
+
+    if upcoming:
+        for task, due_date in sorted(upcoming, key=lambda item: item[1]):
+            print(f"[{task.task_id}] {task.title} | Due: {due_date}")
+    else:
+        print("No upcoming tasks.")
+
 
 def main():
     parser = build_parser()
@@ -157,6 +208,10 @@ def main():
         return
 
     manager = TaskManager()
+    if args.command == "reminders":
+            show_reminders(manager, args.days)
+            return
+    
 
     if args.command == "add":
         task = manager.create_task(
