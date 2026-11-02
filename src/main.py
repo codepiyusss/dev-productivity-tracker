@@ -63,6 +63,9 @@ def build_parser():
 
     journal_list = journal_commands.add_parser("list", help="List journal entries")
     journal_list.add_argument("--limit", type=int, default=7)
+    journal_list.add_argument("--search")
+    journal_list.add_argument("--from-date")
+    journal_list.add_argument("--to-date")
 
     journal_update = journal_commands.add_parser("update", help="Update journal entry")
     journal_update.add_argument("entry_date")
@@ -109,7 +112,12 @@ def handle_journal(args):
 
     elif args.journal_command == "list":
         try:
-            entries = journal.get_all_entries(limit=args.limit)
+            entries = journal.get_all_entries(
+                limit=args.limit,
+                keyword=args.search,
+                start_date=args.from_date,
+                end_date=args.to_date
+            )
 
             if not entries:
                 print("No journal entries found.")

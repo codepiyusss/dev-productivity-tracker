@@ -115,15 +115,38 @@ class ProductivityJournal:
 
         return cursor.rowcount > 0
 
-    def get_all_entries(self, limit=None):
-        query = "SELECT * FROM journal_entries ORDER BY entry_date DESC"
-        parameters = ()
+    def get_all_entries(self, limit=None,keyword=None,start_date=None, end_date=None):
+        query = "SELECT * FROM journal_entries WHERE 1=1"
+        parameters = []
+
+        if keyword:
+            query += """
+                AND (
+                    achievements LIKE ?
+                    OR challenges LIKE ?
+                    OR next_steps LIKE ?
+                )
+            """
+            search = f"%{keyword}%"
+            parameters.extend([search, search, search])
+
+        if start_date:
+            date.fromisoformat(start_date)
+            query += " AND entry_date >= ?"
+            parameters.append(start_date)
+
+        if end_date:
+            date.fromisoformat(end_date)
+            query += " AND entry_date <= ?"
+            parameters.append(end_date)
+
+        query += " ORDER BY entry_date DESC"
 
         if limit is not None:
             if limit < 1:
                 raise ValueError("Limit must be at least 1.")
             query += " LIMIT ?"
-            parameters = (limit,)
+            parameters.append(limit)
 
         with self._connect() as connection:
             rows = connection.execute(query, parameters).fetchall()
