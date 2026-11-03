@@ -1,5 +1,6 @@
 ﻿from typing import List, Optional
 from src.models.task import Task
+from src.utils import normalize_tags
 
 
 def filter_tasks(
@@ -8,6 +9,7 @@ def filter_tasks(
     priority: Optional[str] = None,
     category: Optional[str] = None,
     status: Optional[str] = None,
+    tags: Optional[List[str]] = None,
     sort_by: str = "created_at",
     descending: bool = True
 ) -> List[Task]:
@@ -26,6 +28,10 @@ def filter_tasks(
 
     if category:
         result = [t for t in result if t.category.casefold() == category.casefold()]
+
+    if tags:
+        wanted = normalize_tags(tags)
+        result = [t for t in result if all(tag in t.tags for tag in wanted)]
 
     if status == "completed":
         result = [t for t in result if t.completed]

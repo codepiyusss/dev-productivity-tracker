@@ -1,6 +1,8 @@
-﻿from dataclasses import dataclass
+﻿from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
+
+from src.utils import normalize_tags
 
 
 @dataclass
@@ -13,6 +15,7 @@ class Task:
     completed: bool = False
     task_id: Optional[int] = None
     created_at: str = ""
+    tags: List[str] = field(default_factory=list)
 
     def __post_init__(self):
         if not self.title.strip():
@@ -20,6 +23,8 @@ class Task:
 
         if self.priority not in {"low", "medium", "high"}:
             raise ValueError("Priority must be low, medium, or high.")
+
+        self.tags = normalize_tags(self.tags)
 
         if not self.created_at:
             self.created_at = datetime.now().isoformat(timespec="seconds")
@@ -29,6 +34,30 @@ class Task:
 
     def mark_pending(self):
         self.completed = False
+
+    def add_tag(self, tag: str) -> bool:
+        """Add a tag. Returns False if the task already had it."""
+        (cleaned,) = normalize_tags([tag])
+
+        if cleaned in self.tags:
+            return False
+
+        self.tags.append(cleaned)
+        return True
+
+    def remove_tag(self, tag: str) -> bool:
+        """Remove a tag. Returns False if the task did not have it."""
+        (cleaned,) = normalize_tags([tag])
+
+        if cleaned not in self.tags:
+            return False
+
+        self.tags.remove(cleaned)
+        return True
+
+    def has_tag(self, tag: str) -> bool:
+        (cleaned,) = normalize_tags([tag])
+        return cleaned in self.tags
 
     def to_dict(self):
         return {
@@ -40,6 +69,7 @@ class Task:
             "due_date": self.due_date,
             "completed": self.completed,
             "created_at": self.created_at,
+            "tags": list(self.tags),
         }
 
     @classmethod

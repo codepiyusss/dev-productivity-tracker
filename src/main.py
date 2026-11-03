@@ -6,7 +6,6 @@ from src.analytics import ProductivityAnalytics
 from src.reports import ProductivityReports
 from src.task_filters import filter_tasks
 from src.journal import ProductivityJournal
-from src.exporter import export_tasks
 from src.utils import parse_tag_string
 from datetime import date, timedelta
 
@@ -42,14 +41,6 @@ def build_parser():
         default="created_at"
     )
     list_parser.add_argument("--ascending", action="store_true")
-
-    export = commands.add_parser("export", help="Export tasks to CSV or JSON")
-    export.add_argument("--format", choices=["csv", "json"], default="csv")
-    export.add_argument("--output", help="Output file (default: tasks_export.<format>)")
-    export.add_argument("--status", choices=["pending", "completed"])
-    export.add_argument("--priority", choices=["low", "medium", "high"])
-    export.add_argument("--category")
-    export.add_argument("--tag", action="append", help="Only export tasks with this tag")
 
     # Tag commands
     tag = commands.add_parser("tag", help="Manage task tags")
@@ -130,24 +121,6 @@ def format_task_line(task):
         line += " | " + " ".join(f"#{tag}" for tag in task.tags)
 
     return line
-
-
-def handle_export(manager, args):
-    try:
-        tasks = filter_tasks(
-            manager.get_all_tasks(),
-            priority=args.priority,
-            category=args.category,
-            status=args.status,
-            tags=args.tag
-        )
-        output = args.output or f"tasks_export.{args.format}"
-        path = export_tasks(tasks, output, args.format)
-    except (ValueError, OSError) as error:
-        print(f"Could not export tasks: {error}")
-        return
-
-    print(f"Exported {len(tasks)} task(s) to: {path}")
 
 
 def handle_tags(manager, args):
@@ -311,10 +284,6 @@ def main():
 
     if args.command == "tag":
         handle_tags(manager, args)
-        return
-
-    if args.command == "export":
-        handle_export(manager, args)
         return
 
     if args.command == "add":
