@@ -16,7 +16,8 @@ class TaskManager:
         description: str = "",
         priority: str = "medium",
         category: str = "general",
-        due_date: Optional[str] = None
+        due_date: Optional[str] = None,
+        tags: Optional[List[str]] = None
     ) -> Task:
         """Create and save a new task."""
         task = Task(
@@ -24,7 +25,8 @@ class TaskManager:
             description=description,
             priority=priority,
             category=category,
-            due_date=due_date
+            due_date=due_date,
+            tags=tags or []
         )
         return self.database.add_task(task)
 
@@ -77,6 +79,36 @@ class TaskManager:
 
         self.database.update_task(task)
         return task
+
+    def add_tags(self, task_id: int, tags: List[str]) -> Optional[Task]:
+        """Add one or more tags to a task. Returns None if task not found."""
+        task = self.get_task(task_id)
+
+        if task is None:
+            return None
+
+        for tag in tags:
+            task.add_tag(tag)
+
+        self.database.update_task(task)
+        return task
+
+    def remove_tags(self, task_id: int, tags: List[str]) -> Optional[Task]:
+        """Remove one or more tags from a task. Returns None if not found."""
+        task = self.get_task(task_id)
+
+        if task is None:
+            return None
+
+        for tag in tags:
+            task.remove_tag(tag)
+
+        self.database.update_task(task)
+        return task
+
+    def get_all_tags(self) -> dict:
+        """Return every tag in use with its task count."""
+        return self.database.get_tag_counts()
 
     def complete_task(self, task_id: int) -> bool:
         """Mark a task as completed."""
