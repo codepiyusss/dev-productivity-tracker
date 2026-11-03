@@ -6,6 +6,8 @@ from src.analytics import ProductivityAnalytics
 from src.reports import ProductivityReports
 from src.task_filters import filter_tasks
 from src.journal import ProductivityJournal
+from src.exporter import export_tasks
+from src.importer import import_tasks_csv
 from src.utils import parse_tag_string
 from datetime import date, timedelta
 
@@ -41,6 +43,25 @@ def build_parser():
         default="created_at"
     )
     list_parser.add_argument("--ascending", action="store_true")
+
+    export = commands.add_parser("export", help="Export tasks to CSV or JSON")
+    export.add_argument("--format", choices=["csv", "json"], default="csv")
+    export.add_argument("--output", help="Output file (default: tasks_export.<format>)")
+    export.add_argument("--status", choices=["pending", "completed"])
+    export.add_argument("--priority", choices=["low", "medium", "high"])
+    export.add_argument("--category")
+    export.add_argument("--tag", action="append", help="Only export tasks with this tag")
+
+    import_parser = commands.add_parser("import", help="Import tasks from a CSV file")
+    import_parser.add_argument("csv_file")
+    import_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Validate the file and show results without saving anything"
+    )
+    import_parser.add_argument(
+        "--allow-duplicates", action="store_true",
+        help="Import tasks even if a matching task already exists"
+    )
 
     # Tag commands
     tag = commands.add_parser("tag", help="Manage task tags")
@@ -121,6 +142,50 @@ def format_task_line(task):
         line += " | " + " ".join(f"#{tag}" for tag in task.tags)
 
     return line
+
+
+def handle_export(manager, args):
+    try:
+        tasks = filter_tasks(
+            manager.get_all_tasks(),
+            priority=args.priority,
+            category=args.category,
+            status=args.status,
+            tags=args.tag
+        )
+        output = args.output or f"tasks_export.{args.format}"
+        path = export_tasks(tasks, output, args.format)
+    except (ValueError, OSError) as error:
+        print(f"Could not export tasks: {error}")
+        return
+
+    print(f"Exported {len(tasks)} task(s) to: {path}")
+
+
+def handle_import(manager, args):
+    try:
+        result = import_tasks_csv(
+            args.csv_file,
+            manager,
+            dry_run=args.dry_run,
+            allow_duplicates=args.allow_duplicates
+        )
+    except (ValueError, OSError, UnicodeDecodeError) as error:
+        print(f"Could not import tasks: {error}")
+        return
+
+    prefix = "[Dry run] Would import" if args.dry_run else "Imported"
+    print(f"{prefix} {result.imported} task(s).")
+
+    if result.duplicates:
+        print(f"Skipped {result.duplicates} duplicate task(s).")
+
+    if result.failed:
+        print(f"Skipped {result.failed} invalid row(s):")
+        for message in result.errors[:10]:
+            print(f"  {message}")
+        if len(result.errors) > 10:
+            print(f"  ...and {len(result.errors) - 10} more.")
 
 
 def handle_tags(manager, args):
@@ -284,6 +349,14 @@ def main():
 
     if args.command == "tag":
         handle_tags(manager, args)
+        return
+
+    if args.command == "export":
+        handle_export(manager, args)
+        return
+
+    if args.command == "import":
+        handle_import(manager, args)
         return
 
     if args.command == "add":
