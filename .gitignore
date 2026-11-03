@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .env
 *.db
+
+# Exported task files
+tasks_export.*
+exports/
