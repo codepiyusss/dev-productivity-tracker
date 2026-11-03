@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Add `import` command to load tasks from CSV with validation, line-numbered row errors, duplicate skipping and `--dry-run`.
+- Add `export` command to save tasks as CSV or JSON, with status, priority, category and tag filters.
+- Add `src/exporter.py` with UTF-8, properly escaped CSV output and tags included.
 - Add task tags: multiple tags per task, add/remove tags, filter by tag, tags shown in listings.
 - Add `task_tags` table with automatic, non-destructive migration for existing databases.
 - Add `tag add`, `tag remove` and `tag list` CLI commands, plus `--tags` on `add` and `--tag` on `list`.
