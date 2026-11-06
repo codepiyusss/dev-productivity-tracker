@@ -1,4 +1,5 @@
 ﻿import argparse
+import json
 import sqlite3
 
 from src.tasks import TaskManager
@@ -77,7 +78,15 @@ def build_parser():
 
     tag_commands.add_parser("list", help="List all tags with task counts")
 
-    commands.add_parser("stats", help="Show productivity statistics")
+    stats = commands.add_parser("stats", help="Show productivity statistics")
+    stats.add_argument(
+        "--detailed", action="store_true",
+        help="Show the full breakdown with tags, deadlines and insights"
+    )
+    stats.add_argument(
+        "--json", action="store_true",
+        help="Print all statistics as JSON"
+    )
 
     complete = commands.add_parser("complete", help="Complete a task")
     complete.add_argument("task_id", type=int)
@@ -411,7 +420,19 @@ def main():
 
     elif args.command == "stats":
         analytics = ProductivityAnalytics(manager.database)
-        print(analytics.get_overview())
+
+        if args.json:
+            print(json.dumps(
+                analytics.get_detailed_stats(), indent=2, ensure_ascii=False
+            ))
+        elif args.detailed:
+            print(ProductivityReports(manager.database).generate_text_report())
+        else:
+            overview = analytics.get_overview()
+            print(f"Total: {overview['total']}")
+            print(f"Completed: {overview['completed']}")
+            print(f"Pending: {overview['pending']}")
+            print(f"Completion rate: {overview['completion_rate']}%")
 
     elif args.command == "report":
         reports = ProductivityReports(manager.database)
