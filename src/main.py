@@ -1,7 +1,9 @@
 ﻿import argparse
 import json
 import sqlite3
+import sys
 
+from src.database import Database
 from src.tasks import TaskManager
 from src.analytics import ProductivityAnalytics
 from src.reports import ProductivityReports
@@ -15,9 +17,28 @@ from src.utils import parse_tag_string
 from datetime import date, timedelta
 
 
+EXAMPLES = """examples:
+  python -m src.main add "Write docs" --priority high --due-date 2026-12-01 --tags work
+  python -m src.main list --status pending --sort due_date --ascending
+  python -m src.main complete 3
+  python -m src.main goal set daily 3
+  python -m src.main streak
+  python -m src.main --db other.db stats --detailed
+
+Run "python -m src.main <command> --help" for details on one command."""
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="Dev Productivity Tracker"
+        prog="python -m src.main",
+        description="Dev Productivity Tracker",
+        epilog=EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--db",
+        metavar="PATH",
+        help="Use a different database file (must come before the command)"
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -316,7 +337,8 @@ def display_journal_entry(entry):
 
 
 def handle_journal(args):
-    journal = ProductivityJournal()
+    db_path = getattr(args, "db", None)
+    journal = ProductivityJournal(db_path) if db_path else ProductivityJournal()
 
     if args.journal_command == "add":
         try:
@@ -417,15 +439,15 @@ def show_reminders(manager, days=7):
         print("No upcoming tasks.")
 
 
-def main():
+def main(argv=None):
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.command == "journal":
         handle_journal(args)
         return
 
-    manager = TaskManager()
+    manager = TaskManager(Database(args.db) if args.db else None)
     if args.command == "reminders":
             show_reminders(manager, args.days)
             return
@@ -526,4 +548,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)
