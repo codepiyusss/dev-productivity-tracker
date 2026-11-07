@@ -162,6 +162,15 @@ class ProductivityAnalytics:
         if due_soon:
             insights.append(f"{len(due_soon)} task(s) are due in the next 7 days.")
 
+        streak = StreakTracker(self.database).current_streak(today)
+        if streak["length"] >= 2 and not streak["active_today"]:
+            insights.append(
+                f"Complete a task today to keep your "
+                f"{streak['length']}-day streak alive."
+            )
+        elif streak["length"] >= 2:
+            insights.append(f"You are on a {streak['length']}-day completion streak.")
+
         age = self.get_pending_age_stats(today)
         if age["oldest_days"] >= 7:
             insights.append(
