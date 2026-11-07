@@ -249,6 +249,16 @@ def handle_goal(manager, args):
         print(error)
 
 
+def describe_streak(manager):
+    """One-line streak status shown after completing a task."""
+    length = StreakTracker(manager.database).current_streak()["length"]
+
+    if length <= 1:
+        return "Streak: 1 day. Keep it going tomorrow!"
+
+    return f"Streak: {length} days. Keep it going!"
+
+
 def handle_streak(manager, args):
     try:
         summary = StreakTracker(manager.database).get_summary(days=args.days)
@@ -484,6 +494,7 @@ def main():
             print("Task completed.")
             for item in GoalTracker(manager.database).get_all_progress():
                 print(format_progress(item))
+            print(describe_streak(manager))
         else:
             print("Task not found.")
 
