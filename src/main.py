@@ -191,6 +191,10 @@ def build_parser():
 
     delete = commands.add_parser("delete", help="Delete a task")
     delete.add_argument("task_id", type=positive_int)
+    delete.add_argument(
+        "-y", "--yes", action="store_true",
+        help="Delete without asking for confirmation"
+    )
 
     report = commands.add_parser("report", help="Export productivity report")
     report.add_argument("--output", default="productivity_report.txt")
@@ -400,6 +404,34 @@ def handle_show(manager, args):
         return 1
 
     print(format_task_details(task))
+    return 0
+
+
+def confirm(question):
+    """Ask a yes/no question; anything but yes (or no input) means no."""
+    try:
+        answer = input(f"{question} [y/N]: ")
+    except EOFError:
+        return False
+
+    return answer.strip().casefold() in {"y", "yes"}
+
+
+def handle_delete(manager, args):
+    task = manager.get_task(args.task_id)
+
+    if task is None:
+        print("Task not found.")
+        return 1
+
+    if not args.yes and not confirm(
+        f"Delete task {task.task_id} '{task.title}'? This cannot be undone."
+    ):
+        print("Cancelled. Nothing was deleted.")
+        return 0
+
+    manager.delete_task(args.task_id)
+    print("Task deleted.")
     return 0
 
 
@@ -618,6 +650,9 @@ def main(argv=None):
     if args.command == "show":
         return handle_show(manager, args)
 
+    if args.command == "delete":
+        return handle_delete(manager, args)
+
     if args.command == "reopen":
         return handle_reopen(manager, args)
 
@@ -667,12 +702,6 @@ def main(argv=None):
             print(describe_streak(manager))
         else:
             print("Task not found.")
-
-    elif args.command == "delete":
-        print(
-            "Task deleted." if manager.delete_task(args.task_id)
-            else "Task not found."
-        )
 
     elif args.command == "stats":
         analytics = ProductivityAnalytics(manager.database)
