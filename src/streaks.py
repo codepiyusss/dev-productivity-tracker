@@ -106,3 +106,41 @@ class StreakTracker:
             previous = day
 
         return {"length": best[0], "start": best[1], "end": best[2]}
+
+    def get_summary(self, today: Optional[date] = None, days: int = 14) -> Dict:
+        """Everything about streaks in one JSON-friendly dictionary.
+
+        `recent` lists the last `days` days, oldest first, ending today.
+        """
+        if days < 1:
+            raise ValueError("days must be at least 1.")
+
+        today = today or date.today()
+        counts = self.get_daily_counts()
+        current = self.current_streak(today)
+        longest = self.longest_streak()
+        goal = self.goal_streak(today)
+
+        return {
+            "current": current["length"],
+            "active_today": current["active_today"],
+            "last_active": _iso(current["last_active"]),
+            "at_risk": current["length"] > 0 and not current["active_today"],
+            "longest": longest["length"],
+            "longest_start": _iso(longest["start"]),
+            "longest_end": _iso(longest["end"]),
+            "goal_streak": goal["length"] if goal else None,
+            "daily_target": goal["target"] if goal else None,
+            "total_active_days": len(counts),
+            "recent": [
+                {
+                    "date": (today - timedelta(days=offset)).isoformat(),
+                    "completed": counts.get(today - timedelta(days=offset), 0),
+                }
+                for offset in range(days - 1, -1, -1)
+            ],
+        }
+
+
+def _iso(value: Optional[date]) -> Optional[str]:
+    return value.isoformat() if value else None
