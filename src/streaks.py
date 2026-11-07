@@ -1,6 +1,6 @@
 from collections import Counter
-from datetime import date, datetime
-from typing import Dict, List
+from datetime import date, datetime, timedelta
+from typing import Dict, List, Optional
 
 
 class StreakTracker:
@@ -31,3 +31,32 @@ class StreakTracker:
     def get_completion_dates(self) -> List[date]:
         """Sorted list of days on which at least one task was completed."""
         return sorted(self.get_daily_counts())
+
+    def current_streak(self, today: Optional[date] = None) -> Dict:
+        """Consecutive days with a completed task, ending today.
+
+        A streak is still alive if the last completion was yesterday, so
+        you have until the end of today to extend it.
+        """
+        today = today or date.today()
+        days = set(self.get_completion_dates())
+
+        if today in days:
+            end = today
+        elif today - timedelta(days=1) in days:
+            end = today - timedelta(days=1)
+        else:
+            return {
+                "length": 0,
+                "active_today": False,
+                "last_active": max((d for d in days if d <= today), default=None),
+            }
+
+        length = 0
+        day = end
+
+        while day in days:
+            length += 1
+            day -= timedelta(days=1)
+
+        return {"length": length, "active_today": end == today, "last_active": end}
