@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Add daily and weekly goals: `goal set`, `goal show` and `goal clear`, with progress bars.
+- Show goal progress after `complete` and in the detailed report.
+- Track when tasks are completed (`completed_at`), with a safe migration for existing databases. Tasks completed before this version have no timestamp and do not count toward goals.
+- Add `completed_at` to CSV and JSON exports.
 - Improve analytics: completion rate by priority, category and tag, due-soon and overdue lists, pending task age, weekday patterns and plain-language insights.
 - Add `stats --detailed` and `stats --json`; reports now include the new sections.
 - Overdue detection no longer crashes on invalid due dates.
