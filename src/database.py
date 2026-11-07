@@ -39,9 +39,20 @@ class Database:
                     category TEXT NOT NULL DEFAULT 'general',
                     due_date TEXT,
                     completed INTEGER NOT NULL DEFAULT 0,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    completed_at TEXT
                 )
             """)
+            # Migration: databases created before completion times were
+            # tracked get the new column; existing rows keep NULL.
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(tasks)")
+            }
+            if "completed_at" not in columns:
+                connection.execute(
+                    "ALTER TABLE tasks ADD COLUMN completed_at TEXT"
+                )
             # Migration: tags live in their own table, so existing
             # databases upgrade safely without altering the tasks table.
             connection.execute("""
@@ -57,19 +68,26 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_task_tags_tag "
                 "ON task_tags (tag)"
             )
+            # Migration: productivity goals (one target per period).
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS goals (
+                    period TEXT PRIMARY KEY,
+                    target INTEGER NOT NULL CHECK (target > 0)
+                )
+            """)
 
     def add_task(self, task: Task) -> Task:
         with self._connect() as connection:
             cursor = connection.execute("""
                 INSERT INTO tasks (
                     title, description, priority, category,
-                    due_date, completed, created_at
+                    due_date, completed, created_at, completed_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 task.title, task.description, task.priority,
                 task.category, task.due_date, int(task.completed),
-                task.created_at
+                task.created_at, task.completed_at
             ))
             task.task_id = cursor.lastrowid
             self._save_tags(connection, task.task_id, task.tags)
@@ -114,12 +132,13 @@ class Database:
             cursor = connection.execute("""
                 UPDATE tasks
                 SET title = ?, description = ?, priority = ?,
-                    category = ?, due_date = ?, completed = ?
+                    category = ?, due_date = ?, completed = ?,
+                    completed_at = ?
                 WHERE task_id = ?
             """, (
                 task.title, task.description, task.priority,
                 task.category, task.due_date, int(task.completed),
-                task.task_id
+                task.completed_at, task.task_id
             ))
 
             if cursor.rowcount > 0:
@@ -131,6 +150,35 @@ class Database:
         with self._connect() as connection:
             cursor = connection.execute(
                 "DELETE FROM tasks WHERE task_id = ?", (task_id,)
+            )
+        return cursor.rowcount > 0
+
+    def set_goal(self, period: str, target: int) -> None:
+        """Create or replace the completion target for a period."""
+        with self._connect() as connection:
+            connection.execute("""
+                INSERT INTO goals (period, target) VALUES (?, ?)
+                ON CONFLICT(period) DO UPDATE SET target = excluded.target
+            """, (period, target))
+
+    def get_goal(self, period: str) -> Optional[int]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT target FROM goals WHERE period = ?", (period,)
+            ).fetchone()
+        return row["target"] if row else None
+
+    def get_goals(self) -> Dict[str, int]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT period, target FROM goals ORDER BY period"
+            ).fetchall()
+        return {row["period"]: row["target"] for row in rows}
+
+    def clear_goal(self, period: str) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM goals WHERE period = ?", (period,)
             )
         return cursor.rowcount > 0
 
@@ -186,5 +234,6 @@ class Database:
             due_date=row["due_date"],
             completed=bool(row["completed"]),
             created_at=row["created_at"],
+            completed_at=row["completed_at"],
             tags=tags or []
         )

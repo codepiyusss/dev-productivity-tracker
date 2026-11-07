@@ -1,9 +1,11 @@
 ﻿from src.analytics import ProductivityAnalytics
+from src.goals import GoalTracker, format_progress
 
 
 class ProductivityReports:
     def __init__(self, database):
         self.analytics = ProductivityAnalytics(database)
+        self.goals = GoalTracker(database)
 
     def generate_text_report(self):
         overview = self.analytics.get_overview()
@@ -69,6 +71,11 @@ class ProductivityReports:
             lines.extend(["", "DUE IN NEXT 7 DAYS", "-" * 35])
             for task in due_soon:
                 lines.append(f"[{task.task_id}] {task.title} (due {task.due_date})")
+
+        goal_progress = self.goals.get_all_progress()
+        if goal_progress:
+            lines.extend(["", "GOALS", "-" * 35])
+            lines.extend(format_progress(item) for item in goal_progress)
 
         lines.extend(["", "INSIGHTS", "-" * 35])
         lines.extend(f"- {insight}" for insight in analytics.get_insights())

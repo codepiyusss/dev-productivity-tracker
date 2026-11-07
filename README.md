@@ -17,3 +17,14 @@ python -m src.main stats --detailed   # full breakdown with insights
 python -m src.main stats --json       # machine-readable output
 python -m src.main report             # save the detailed report to a file
 ```
+
+## Goals
+
+```
+python -m src.main goal set daily 3
+python -m src.main goal set weekly 15
+python -m src.main goal show
+python -m src.main goal clear weekly
+```
+
+Progress is shown after every `complete` and in `stats --detailed`.

@@ -8,6 +8,7 @@ from src.reports import ProductivityReports
 from src.task_filters import filter_tasks
 from src.journal import ProductivityJournal
 from src.exporter import export_tasks
+from src.goals import PERIODS, GoalTracker, format_progress
 from src.importer import import_tasks_csv
 from src.utils import parse_tag_string
 from datetime import date, timedelta
@@ -77,6 +78,18 @@ def build_parser():
     tag_remove.add_argument("tags", help="Comma-separated tags")
 
     tag_commands.add_parser("list", help="List all tags with task counts")
+
+    goal = commands.add_parser("goal", help="Manage daily and weekly goals")
+    goal_commands = goal.add_subparsers(dest="goal_command", required=True)
+
+    goal_set = goal_commands.add_parser("set", help="Set a completion target")
+    goal_set.add_argument("period", choices=PERIODS)
+    goal_set.add_argument("target", type=int, help="Tasks to complete")
+
+    goal_commands.add_parser("show", help="Show progress toward your goals")
+
+    goal_clear = goal_commands.add_parser("clear", help="Remove a goal")
+    goal_clear.add_argument("period", choices=PERIODS)
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
     stats.add_argument(
@@ -195,6 +208,35 @@ def handle_import(manager, args):
             print(f"  {message}")
         if len(result.errors) > 10:
             print(f"  ...and {len(result.errors) - 10} more.")
+
+
+def handle_goal(manager, args):
+    tracker = GoalTracker(manager.database)
+
+    try:
+        if args.goal_command == "set":
+            tracker.set_goal(args.period, args.target)
+            print(f"{args.period.title()} goal set to {args.target} task(s).")
+
+        elif args.goal_command == "clear":
+            removed = tracker.clear_goal(args.period)
+            print(
+                f"{args.period.title()} goal removed." if removed
+                else f"No {args.period} goal was set."
+            )
+
+        else:
+            progress = tracker.get_all_progress()
+
+            if not progress:
+                print("No goals set. Try: goal set daily 3")
+                return
+
+            for item in progress:
+                print(format_progress(item))
+
+    except ValueError as error:
+        print(error)
 
 
 def handle_tags(manager, args):
@@ -368,6 +410,10 @@ def main():
         handle_import(manager, args)
         return
 
+    if args.command == "goal":
+        handle_goal(manager, args)
+        return
+
     if args.command == "add":
         try:
             task = manager.create_task(
@@ -407,10 +453,12 @@ def main():
             print(format_task_line(task))
 
     elif args.command == "complete":
-        print(
-            "Task completed." if manager.complete_task(args.task_id)
-            else "Task not found."
-        )
+        if manager.complete_task(args.task_id):
+            print("Task completed.")
+            for item in GoalTracker(manager.database).get_all_progress():
+                print(format_progress(item))
+        else:
+            print("Task not found.")
 
     elif args.command == "delete":
         print(
