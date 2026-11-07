@@ -1,7 +1,9 @@
 ﻿import argparse
 import json
 import sqlite3
+import sys
 
+from src.database import Database
 from src.tasks import TaskManager
 from src.analytics import ProductivityAnalytics
 from src.reports import ProductivityReports
@@ -11,13 +13,68 @@ from src.journal import ProductivityJournal
 from src.exporter import export_tasks
 from src.goals import PERIODS, GoalTracker, format_progress
 from src.importer import import_tasks_csv
-from src.utils import parse_tag_string
+from src.utils import parse_tag_string, validate_due_date
 from datetime import date, timedelta
+
+
+def positive_int(value):
+    """argparse type: a whole number of at least 1."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{value}' is not a whole number")
+
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"{number} must be at least 1")
+
+    return number
+
+
+def non_negative_int(value):
+    """argparse type: a whole number of at least 0."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{value}' is not a whole number")
+
+    if number < 0:
+        raise argparse.ArgumentTypeError(f"{number} cannot be negative")
+
+    return number
+
+
+def valid_date(value):
+    """argparse type: a real date, returned as YYYY-MM-DD."""
+    try:
+        return validate_due_date(value) or ""
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"invalid date '{value}' (use YYYY-MM-DD)"
+        )
+
+
+EXAMPLES = """examples:
+  python -m src.main add "Write docs" --priority high --due-date 2026-12-01 --tags work
+  python -m src.main list --status pending --sort due_date --ascending
+  python -m src.main complete 3
+  python -m src.main goal set daily 3
+  python -m src.main streak
+  python -m src.main --db other.db stats --detailed
+
+Run "python -m src.main <command> --help" for details on one command."""
 
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="Dev Productivity Tracker"
+        prog="python -m src.main",
+        description="Dev Productivity Tracker",
+        epilog=EXAMPLES,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--db",
+        metavar="PATH",
+        help="Use a different database file (must come before the command)"
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -27,7 +84,7 @@ def build_parser():
     add.add_argument("--priority", choices=["low", "medium", "high"], default="medium")
     add.add_argument("--category", default="general")
     add.add_argument("--description", default="")
-    add.add_argument("--due-date")
+    add.add_argument("--due-date", type=valid_date, help="YYYY-MM-DD")
     add.add_argument("--tags", help="Comma-separated tags, e.g. work,urgent")
 
     list_parser = commands.add_parser("list", help="List and filter tasks")
@@ -71,11 +128,11 @@ def build_parser():
     tag_commands = tag.add_subparsers(dest="tag_command", required=True)
 
     tag_add = tag_commands.add_parser("add", help="Add tags to a task")
-    tag_add.add_argument("task_id", type=int)
+    tag_add.add_argument("task_id", type=positive_int)
     tag_add.add_argument("tags", help="Comma-separated tags")
 
     tag_remove = tag_commands.add_parser("remove", help="Remove tags from a task")
-    tag_remove.add_argument("task_id", type=int)
+    tag_remove.add_argument("task_id", type=positive_int)
     tag_remove.add_argument("tags", help="Comma-separated tags")
 
     tag_commands.add_parser("list", help="List all tags with task counts")
@@ -112,10 +169,32 @@ def build_parser():
     )
 
     complete = commands.add_parser("complete", help="Complete a task")
-    complete.add_argument("task_id", type=int)
+    complete.add_argument("task_id", type=positive_int)
+
+    show = commands.add_parser("show", help="Show all details of one task")
+    show.add_argument("task_id", type=positive_int)
+
+    reopen = commands.add_parser("reopen", help="Move a completed task back to pending")
+    reopen.add_argument("task_id", type=positive_int)
+
+    edit = commands.add_parser("edit", help="Change fields of an existing task")
+    edit.add_argument("task_id", type=positive_int)
+    edit.add_argument("--title")
+    edit.add_argument("--description")
+    edit.add_argument("--priority", choices=["low", "medium", "high"])
+    edit.add_argument("--category")
+    due = edit.add_mutually_exclusive_group()
+    due.add_argument("--due-date", type=valid_date, help="YYYY-MM-DD")
+    due.add_argument(
+        "--clear-due-date", action="store_true", help="Remove the due date"
+    )
 
     delete = commands.add_parser("delete", help="Delete a task")
-    delete.add_argument("task_id", type=int)
+    delete.add_argument("task_id", type=positive_int)
+    delete.add_argument(
+        "-y", "--yes", action="store_true",
+        help="Delete without asking for confirmation"
+    )
 
     report = commands.add_parser("report", help="Export productivity report")
     report.add_argument("--output", default="productivity_report.txt")
@@ -128,47 +207,63 @@ def build_parser():
     )
 
     journal_add = journal_commands.add_parser("add", help="Create journal entry")
-    journal_add.add_argument("--date", dest="entry_date")
+    journal_add.add_argument(
+        "--date", dest="entry_date", type=valid_date, help="YYYY-MM-DD (default: today)"
+    )
     journal_add.add_argument("--achievements", default="")
     journal_add.add_argument("--challenges", default="")
     journal_add.add_argument("--next-steps", default="")
 
     journal_show = journal_commands.add_parser("show", help="View journal entry")
-    journal_show.add_argument("entry_date")
+    journal_show.add_argument("entry_date", type=valid_date)
 
     journal_list = journal_commands.add_parser("list", help="List journal entries")
-    journal_list.add_argument("--limit", type=int, default=7)
+    journal_list.add_argument("--limit", type=positive_int, default=7)
     journal_list.add_argument("--search")
-    journal_list.add_argument("--from-date")
-    journal_list.add_argument("--to-date")
+    journal_list.add_argument("--from-date", type=valid_date)
+    journal_list.add_argument("--to-date", type=valid_date)
 
     journal_update = journal_commands.add_parser("update", help="Update journal entry")
-    journal_update.add_argument("entry_date")
+    journal_update.add_argument("entry_date", type=valid_date)
     journal_update.add_argument("--achievements")
     journal_update.add_argument("--challenges")
     journal_update.add_argument("--next-steps")
 
     journal_delete = journal_commands.add_parser("delete", help="Delete journal entry")
-    journal_delete.add_argument("entry_date")
+    journal_delete.add_argument("entry_date", type=valid_date)
     reminders = commands.add_parser(
         "reminders",
         help="Show overdue tasks and upcoming due dates"
     )
     reminders.add_argument(
         "--days",
-        type=int,
+        type=non_negative_int,
         default=7,
         help="Show tasks due within the next N days"
     )
     return parser
 
 
-def format_task_line(task):
+def is_overdue(due_date, today=None):
+    """True if the due date is before today. Unreadable dates are not overdue."""
+    try:
+        return date.fromisoformat(str(due_date)) < (today or date.today())
+    except ValueError:
+        return False
+
+
+def format_task_line(task, today=None):
     status = "Done" if task.completed else "Pending"
     line = (
         f"[{task.task_id}] {task.title} | "
         f"{task.priority} | {task.category} | {status}"
     )
+
+    if task.due_date:
+        line += f" | due {task.due_date}"
+
+        if not task.completed and is_overdue(task.due_date, today):
+            line += " (OVERDUE)"
 
     if task.tags:
         line += " | " + " ".join(f"#{tag}" for tag in task.tags)
@@ -259,6 +354,117 @@ def describe_streak(manager):
     return f"Streak: {length} days. Keep it going!"
 
 
+def handle_edit(manager, args):
+    changes = {
+        "title": args.title,
+        "description": args.description,
+        "priority": args.priority,
+        "category": args.category,
+        "due_date": args.due_date,
+    }
+    changes = {key: value for key, value in changes.items() if value is not None}
+
+    if args.clear_due_date:
+        changes["due_date"] = None
+
+    if not changes:
+        print("Nothing to change. Use --title, --description, --priority, "
+              "--category, --due-date or --clear-due-date.")
+        return 1
+
+    if "category" in changes and not changes["category"].strip():
+        print("Category cannot be empty.")
+        return 1
+
+    try:
+        task = manager.update_task(args.task_id, **changes)
+    except ValueError as error:
+        print(f"Could not update task: {error}")
+        return 1
+
+    if task is None:
+        print("Task not found.")
+        return 1
+
+    print(f"Task {task.task_id} updated.")
+    print(format_task_line(task))
+    return 0
+
+
+def format_task_details(task):
+    """Multi-line view of a single task."""
+    if task.completed:
+        status = f"Completed ({task.completed_at})" if task.completed_at else "Completed"
+    else:
+        status = "Pending"
+
+    return "\n".join([
+        f"Task {task.task_id}: {task.title}",
+        f"  Status:      {status}",
+        f"  Priority:    {task.priority}",
+        f"  Category:    {task.category}",
+        f"  Due date:    {task.due_date or 'none'}",
+        f"  Tags:        {' '.join('#' + tag for tag in task.tags) or 'none'}",
+        f"  Created:     {task.created_at}",
+        f"  Description: {task.description or 'none'}",
+    ])
+
+
+def handle_show(manager, args):
+    task = manager.get_task(args.task_id)
+
+    if task is None:
+        print("Task not found.")
+        return 1
+
+    print(format_task_details(task))
+    return 0
+
+
+def confirm(question):
+    """Ask a yes/no question; anything but yes (or no input) means no."""
+    try:
+        answer = input(f"{question} [y/N]: ")
+    except EOFError:
+        return False
+
+    return answer.strip().casefold() in {"y", "yes"}
+
+
+def handle_delete(manager, args):
+    task = manager.get_task(args.task_id)
+
+    if task is None:
+        print("Task not found.")
+        return 1
+
+    if not args.yes and not confirm(
+        f"Delete task {task.task_id} '{task.title}'? This cannot be undone."
+    ):
+        print("Cancelled. Nothing was deleted.")
+        return 0
+
+    manager.delete_task(args.task_id)
+    print("Task deleted.")
+    return 0
+
+
+def handle_reopen(manager, args):
+    task = manager.get_task(args.task_id)
+
+    if task is None:
+        print("Task not found.")
+        return 1
+
+    if not task.completed:
+        print(f"Task {task.task_id} is already pending.")
+        return 0
+
+    manager.reopen_task(args.task_id)
+    print(f"Task {task.task_id} reopened.")
+    return 0
+
+
 def handle_streak(manager, args):
     try:
         summary = StreakTracker(manager.database).get_summary(days=args.days)
@@ -316,7 +522,8 @@ def display_journal_entry(entry):
 
 
 def handle_journal(args):
-    journal = ProductivityJournal()
+    db_path = getattr(args, "db", None)
+    journal = ProductivityJournal(db_path) if db_path else ProductivityJournal()
 
     if args.journal_command == "add":
         try:
@@ -417,15 +624,30 @@ def show_reminders(manager, days=7):
         print("No upcoming tasks.")
 
 
-def main():
+def main(argv=None):
+    """Run the CLI and return an exit code (0 = success)."""
+    try:
+        return _run(argv) or 0
+    except KeyboardInterrupt:
+        print("\nCancelled.")
+        return 130
+    except sqlite3.Error as error:
+        print(f"Database error: {error}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        print(f"File error: {error}", file=sys.stderr)
+        return 1
+
+
+def _run(argv=None):
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.command == "journal":
         handle_journal(args)
         return
 
-    manager = TaskManager()
+    manager = TaskManager(Database(args.db) if args.db else None)
     if args.command == "reminders":
             show_reminders(manager, args.days)
             return
@@ -450,6 +672,18 @@ def main():
     if args.command == "streak":
         handle_streak(manager, args)
         return
+
+    if args.command == "edit":
+        return handle_edit(manager, args)
+
+    if args.command == "show":
+        return handle_show(manager, args)
+
+    if args.command == "delete":
+        return handle_delete(manager, args)
+
+    if args.command == "reopen":
+        return handle_reopen(manager, args)
 
     if args.command == "add":
         try:
@@ -497,12 +731,7 @@ def main():
             print(describe_streak(manager))
         else:
             print("Task not found.")
-
-    elif args.command == "delete":
-        print(
-            "Task deleted." if manager.delete_task(args.task_id)
-            else "Task not found."
-        )
+            return 1
 
     elif args.command == "stats":
         analytics = ProductivityAnalytics(manager.database)
@@ -526,4 +755,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

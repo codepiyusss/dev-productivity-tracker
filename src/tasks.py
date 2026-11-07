@@ -2,6 +2,9 @@
 
 from src.database import Database
 from src.models.task import Task
+from src.utils import validate_due_date
+
+PRIORITIES = {"low", "medium", "high"}
 
 
 class TaskManager:
@@ -25,7 +28,7 @@ class TaskManager:
             description=description,
             priority=priority,
             category=category,
-            due_date=due_date,
+            due_date=validate_due_date(due_date),
             tags=tags or []
         )
         return self.database.add_task(task)
@@ -73,6 +76,15 @@ class TaskManager:
 
         if task is None:
             return None
+
+        if "title" in updates and not str(updates["title"]).strip():
+            raise ValueError("Task title cannot be empty.")
+
+        if "priority" in updates and updates["priority"] not in PRIORITIES:
+            raise ValueError("Priority must be low, medium, or high.")
+
+        if "due_date" in updates:
+            updates["due_date"] = validate_due_date(updates["due_date"])
 
         for field, value in updates.items():
             setattr(task, field, value)

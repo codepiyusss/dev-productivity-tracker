@@ -10,3 +10,5 @@
 - Daily and weekly goals with progress tracking
 - Task completion timestamps
 - Completion streaks: current, longest and daily-goal streaks
+- Task editing, detail view and reopening
+- Input validation with clear CLI error messages

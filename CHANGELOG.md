@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- Add `edit`, `show` and `reopen` commands; `delete` now asks for confirmation (skip with `--yes`).
+- Validate due dates (real YYYY-MM-DD dates only), task IDs, journal dates and counts with clear error messages.
+- Fix: invalid due dates such as `31-12-2026` were silently accepted when adding or updating a task.
+- Fix: `TaskManager.update_task` now rejects invalid priorities and empty titles.
+- Show due dates and an overdue marker in task listings.
+- Add global `--db PATH` option and usage examples to `--help`.
+- Show friendly messages instead of tracebacks for database and file errors; commands now return meaningful exit codes.
 - Add streak tracking: current streak (with an end-of-day grace period), longest streak, daily goal streak and active-day totals.
 - Add `streak` command with `--days` and `--json`; streak status also shows after `complete`, in the detailed report and in insights.
 - Fix `get_completion_streak` to use completion dates instead of creation dates.
