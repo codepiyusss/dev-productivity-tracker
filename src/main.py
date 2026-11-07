@@ -625,6 +625,21 @@ def show_reminders(manager, days=7):
 
 
 def main(argv=None):
+    """Run the CLI and return an exit code (0 = success)."""
+    try:
+        return _run(argv) or 0
+    except KeyboardInterrupt:
+        print("\nCancelled.")
+        return 130
+    except sqlite3.Error as error:
+        print(f"Database error: {error}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        print(f"File error: {error}", file=sys.stderr)
+        return 1
+
+
+def _run(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -716,6 +731,7 @@ def main(argv=None):
             print(describe_streak(manager))
         else:
             print("Task not found.")
+            return 1
 
     elif args.command == "stats":
         analytics = ProductivityAnalytics(manager.database)
@@ -739,4 +755,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main() or 0)
+    sys.exit(main())
