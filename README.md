@@ -38,3 +38,25 @@ python -m src.main streak --json      # machine-readable output
 ```
 
 In the activity strip, `#` marks a day with a completed task and `-` a day without.
+
+## Command reference
+
+| Command | Purpose |
+|---|---|
+| `add`, `list`, `show`, `edit`, `complete`, `reopen`, `delete` | Manage tasks |
+| `tag add/remove/list` | Organize tasks with tags |
+| `export`, `import` | Move tasks in and out as CSV or JSON |
+| `goal set/show/clear`, `streak` | Targets and consistency |
+| `stats`, `report`, `reminders` | Analytics and deadlines |
+| `journal add/show/list/update/delete` | Daily journal |
+
+```
+python -m src.main edit 3 --priority high --due-date 2026-12-01
+python -m src.main edit 3 --clear-due-date
+python -m src.main show 3
+python -m src.main delete 3          # asks first; use --yes to skip
+python -m src.main --db work.db list # use another database file
+```
+
+Dates must be real `YYYY-MM-DD` dates. Commands exit with code 0 on success and 1 on
+failure (for example, a task that does not exist), so they can be used in scripts.
