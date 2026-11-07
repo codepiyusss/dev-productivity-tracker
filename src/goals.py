@@ -99,3 +99,19 @@ class GoalTracker:
     def get_all_progress(self, today: Optional[date] = None) -> List[Dict]:
         progress = (self.get_progress(period, today) for period in PERIODS)
         return [item for item in progress if item is not None]
+
+
+def format_progress(progress: Dict, width: int = 10) -> str:
+    """One readable line, e.g. 'Daily goal: [######----] 2/3 (66.7%)'."""
+    filled = round(progress["percent"] / 100 * width)
+    bar = "#" * filled + "-" * (width - filled)
+    line = (
+        f"{progress['period'].title()} goal: [{bar}] "
+        f"{progress['completed']}/{progress['target']} "
+        f"({progress['percent']}%)"
+    )
+
+    if progress["met"]:
+        return line + " - goal met!"
+
+    return line + f" - {progress['remaining']} to go"
