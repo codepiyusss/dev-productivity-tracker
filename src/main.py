@@ -5,6 +5,7 @@ import sqlite3
 from src.tasks import TaskManager
 from src.analytics import ProductivityAnalytics
 from src.reports import ProductivityReports
+from src.streaks import StreakTracker, format_streak_summary
 from src.task_filters import filter_tasks
 from src.journal import ProductivityJournal
 from src.exporter import export_tasks
@@ -90,6 +91,15 @@ def build_parser():
 
     goal_clear = goal_commands.add_parser("clear", help="Remove a goal")
     goal_clear.add_argument("period", choices=PERIODS)
+
+    streak = commands.add_parser("streak", help="Show your completion streaks")
+    streak.add_argument(
+        "--days", type=int, default=14,
+        help="Days of recent activity to display (default: 14)"
+    )
+    streak.add_argument(
+        "--json", action="store_true", help="Print the streak data as JSON"
+    )
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
     stats.add_argument(
@@ -237,6 +247,29 @@ def handle_goal(manager, args):
 
     except ValueError as error:
         print(error)
+
+
+def describe_streak(manager):
+    """One-line streak status shown after completing a task."""
+    length = StreakTracker(manager.database).current_streak()["length"]
+
+    if length <= 1:
+        return "Streak: 1 day. Keep it going tomorrow!"
+
+    return f"Streak: {length} days. Keep it going!"
+
+
+def handle_streak(manager, args):
+    try:
+        summary = StreakTracker(manager.database).get_summary(days=args.days)
+    except ValueError as error:
+        print(error)
+        return
+
+    if args.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        print(format_streak_summary(summary))
 
 
 def handle_tags(manager, args):
@@ -414,6 +447,10 @@ def main():
         handle_goal(manager, args)
         return
 
+    if args.command == "streak":
+        handle_streak(manager, args)
+        return
+
     if args.command == "add":
         try:
             task = manager.create_task(
@@ -457,6 +494,7 @@ def main():
             print("Task completed.")
             for item in GoalTracker(manager.database).get_all_progress():
                 print(format_progress(item))
+            print(describe_streak(manager))
         else:
             print("Task not found.")
 

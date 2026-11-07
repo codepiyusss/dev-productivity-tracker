@@ -1,6 +1,8 @@
 ﻿from datetime import date, timedelta
 from collections import Counter
 
+from src.streaks import StreakTracker
+
 
 class ProductivityAnalytics:
     def __init__(self, database):
@@ -160,6 +162,15 @@ class ProductivityAnalytics:
         if due_soon:
             insights.append(f"{len(due_soon)} task(s) are due in the next 7 days.")
 
+        streak = StreakTracker(self.database).current_streak(today)
+        if streak["length"] >= 2 and not streak["active_today"]:
+            insights.append(
+                f"Complete a task today to keep your "
+                f"{streak['length']}-day streak alive."
+            )
+        elif streak["length"] >= 2:
+            insights.append(f"You are on a {streak['length']}-day completion streak.")
+
         age = self.get_pending_age_stats(today)
         if age["oldest_days"] >= 7:
             insights.append(
@@ -228,17 +239,10 @@ class ProductivityAnalytics:
             for offset in range(7)
         ]
 
-    def get_completion_streak(self):
-        tasks = self.database.get_all_tasks(completed=True)
-        completion_dates = {
-            task.created_at[:10] for task in tasks if task.created_at
-        }
+    def get_completion_streak(self, today=None):
+        """Current streak in days, based on when tasks were completed.
 
-        streak = 0
-        current_day = date.today()
-
-        while current_day.isoformat() in completion_dates:
-            streak += 1
-            current_day -= timedelta(days=1)
-
-        return streak
+        Previously this used each task's creation date, which was wrong for
+        tasks completed on a different day than they were created.
+        """
+        return StreakTracker(self.database).current_streak(today)["length"]

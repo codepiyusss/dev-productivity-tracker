@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Add streak tracking: current streak (with an end-of-day grace period), longest streak, daily goal streak and active-day totals.
+- Add `streak` command with `--days` and `--json`; streak status also shows after `complete`, in the detailed report and in insights.
+- Fix `get_completion_streak` to use completion dates instead of creation dates.
 - Add daily and weekly goals: `goal set`, `goal show` and `goal clear`, with progress bars.
 - Show goal progress after `complete` and in the detailed report.
 - Track when tasks are completed (`completed_at`), with a safe migration for existing databases. Tasks completed before this version have no timestamp and do not count toward goals.

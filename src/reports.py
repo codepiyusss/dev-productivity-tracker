@@ -1,11 +1,13 @@
 ﻿from src.analytics import ProductivityAnalytics
 from src.goals import GoalTracker, format_progress
+from src.streaks import StreakTracker, format_streak_summary
 
 
 class ProductivityReports:
     def __init__(self, database):
         self.analytics = ProductivityAnalytics(database)
         self.goals = GoalTracker(database)
+        self.streaks = StreakTracker(database)
 
     def generate_text_report(self):
         overview = self.analytics.get_overview()
@@ -76,6 +78,11 @@ class ProductivityReports:
         if goal_progress:
             lines.extend(["", "GOALS", "-" * 35])
             lines.extend(format_progress(item) for item in goal_progress)
+
+        streak_summary = self.streaks.get_summary()
+        if streak_summary["total_active_days"]:
+            lines.extend(["", "STREAKS", "-" * 35])
+            lines.extend(format_streak_summary(streak_summary).splitlines())
 
         lines.extend(["", "INSIGHTS", "-" * 35])
         lines.extend(f"- {insight}" for insight in analytics.get_insights())
