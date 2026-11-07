@@ -171,6 +171,18 @@ def build_parser():
     complete = commands.add_parser("complete", help="Complete a task")
     complete.add_argument("task_id", type=positive_int)
 
+    edit = commands.add_parser("edit", help="Change fields of an existing task")
+    edit.add_argument("task_id", type=positive_int)
+    edit.add_argument("--title")
+    edit.add_argument("--description")
+    edit.add_argument("--priority", choices=["low", "medium", "high"])
+    edit.add_argument("--category")
+    due = edit.add_mutually_exclusive_group()
+    due.add_argument("--due-date", type=valid_date, help="YYYY-MM-DD")
+    due.add_argument(
+        "--clear-due-date", action="store_true", help="Remove the due date"
+    )
+
     delete = commands.add_parser("delete", help="Delete a task")
     delete.add_argument("task_id", type=positive_int)
 
@@ -316,6 +328,43 @@ def describe_streak(manager):
         return "Streak: 1 day. Keep it going tomorrow!"
 
     return f"Streak: {length} days. Keep it going!"
+
+
+def handle_edit(manager, args):
+    changes = {
+        "title": args.title,
+        "description": args.description,
+        "priority": args.priority,
+        "category": args.category,
+        "due_date": args.due_date,
+    }
+    changes = {key: value for key, value in changes.items() if value is not None}
+
+    if args.clear_due_date:
+        changes["due_date"] = None
+
+    if not changes:
+        print("Nothing to change. Use --title, --description, --priority, "
+              "--category, --due-date or --clear-due-date.")
+        return 1
+
+    if "category" in changes and not changes["category"].strip():
+        print("Category cannot be empty.")
+        return 1
+
+    try:
+        task = manager.update_task(args.task_id, **changes)
+    except ValueError as error:
+        print(f"Could not update task: {error}")
+        return 1
+
+    if task is None:
+        print("Task not found.")
+        return 1
+
+    print(f"Task {task.task_id} updated.")
+    print(format_task_line(task))
+    return 0
 
 
 def handle_streak(manager, args):
@@ -510,6 +559,9 @@ def main(argv=None):
     if args.command == "streak":
         handle_streak(manager, args)
         return
+
+    if args.command == "edit":
+        return handle_edit(manager, args)
 
     if args.command == "add":
         try:
