@@ -144,3 +144,42 @@ class StreakTracker:
 
 def _iso(value: Optional[date]) -> Optional[str]:
     return value.isoformat() if value else None
+
+
+def _days(count: int) -> str:
+    return f"{count} day" if count == 1 else f"{count} days"
+
+
+def format_streak_summary(summary: Dict) -> str:
+    """Readable multi-line text for a summary from `get_summary`."""
+    lines = []
+
+    if summary["current"]:
+        note = (
+            "completed a task today" if summary["active_today"]
+            else "complete a task today to keep it going"
+        )
+        lines.append(f"Current streak: {_days(summary['current'])} ({note})")
+    else:
+        lines.append("Current streak: 0 days (complete a task to start one)")
+
+    if summary["longest"]:
+        lines.append(
+            f"Longest streak: {_days(summary['longest'])} "
+            f"({summary['longest_start']} to {summary['longest_end']})"
+        )
+    else:
+        lines.append("Longest streak: 0 days")
+
+    if summary["goal_streak"] is not None:
+        lines.append(
+            f"Goal streak: {_days(summary['goal_streak'])} "
+            f"(daily target: {summary['daily_target']})"
+        )
+
+    lines.append(f"Active days: {summary['total_active_days']}")
+
+    strip = "".join("#" if day["completed"] else "-" for day in summary["recent"])
+    lines.append(f"Last {len(summary['recent'])} days: [{strip}] (oldest to today)")
+
+    return "\n".join(lines)
