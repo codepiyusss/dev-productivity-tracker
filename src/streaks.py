@@ -60,3 +60,28 @@ class StreakTracker:
             day -= timedelta(days=1)
 
         return {"length": length, "active_today": end == today, "last_active": end}
+
+    def longest_streak(self) -> Dict:
+        """The longest run of consecutive days with a completed task.
+
+        If several runs tie, the most recent one is returned.
+        """
+        days = self.get_completion_dates()
+
+        if not days:
+            return {"length": 0, "start": None, "end": None}
+
+        best = (0, None, None)
+        run_start = previous = days[0]
+        length = 1
+
+        for day in days[1:] + [None]:
+            if day is not None and day - previous == timedelta(days=1):
+                length += 1
+            else:
+                if length >= best[0]:
+                    best = (length, run_start, previous)
+                run_start, length = day, 1
+            previous = day
+
+        return {"length": best[0], "start": best[1], "end": best[2]}
