@@ -28,3 +28,13 @@ python -m src.main goal clear weekly
 ```
 
 Progress is shown after every `complete` and in `stats --detailed`.
+
+## Streaks
+
+```
+python -m src.main streak             # current, longest and goal streaks
+python -m src.main streak --days 30   # longer activity strip
+python -m src.main streak --json      # machine-readable output
+```
+
+In the activity strip, `#` marks a day with a completed task and `-` a day without.
