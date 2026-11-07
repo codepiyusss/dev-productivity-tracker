@@ -244,12 +244,26 @@ def build_parser():
     return parser
 
 
-def format_task_line(task):
+def is_overdue(due_date, today=None):
+    """True if the due date is before today. Unreadable dates are not overdue."""
+    try:
+        return date.fromisoformat(str(due_date)) < (today or date.today())
+    except ValueError:
+        return False
+
+
+def format_task_line(task, today=None):
     status = "Done" if task.completed else "Pending"
     line = (
         f"[{task.task_id}] {task.title} | "
         f"{task.priority} | {task.category} | {status}"
     )
+
+    if task.due_date:
+        line += f" | due {task.due_date}"
+
+        if not task.completed and is_overdue(task.due_date, today):
+            line += " (OVERDUE)"
 
     if task.tags:
         line += " | " + " ".join(f"#{tag}" for tag in task.tags)
