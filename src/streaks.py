@@ -39,8 +39,11 @@ class StreakTracker:
         you have until the end of today to extend it.
         """
         today = today or date.today()
-        days = set(self.get_completion_dates())
+        return self._run_ending_at(set(self.get_completion_dates()), today)
 
+    @staticmethod
+    def _run_ending_at(days: set, today: date) -> Dict:
+        """Length of the consecutive-day run that ends today or yesterday."""
         if today in days:
             end = today
         elif today - timedelta(days=1) in days:
@@ -60,6 +63,24 @@ class StreakTracker:
             day -= timedelta(days=1)
 
         return {"length": length, "active_today": end == today, "last_active": end}
+
+    def goal_streak(self, today: Optional[date] = None) -> Optional[Dict]:
+        """Streak of days on which the daily goal was met.
+
+        Returns None when no daily goal is set.
+        """
+        target = self.database.get_goal("daily")
+
+        if target is None:
+            return None
+
+        today = today or date.today()
+        met_days = {
+            day for day, count in self.get_daily_counts().items()
+            if count >= target
+        }
+
+        return {"target": target, **self._run_ending_at(met_days, today)}
 
     def longest_streak(self) -> Dict:
         """The longest run of consecutive days with a completed task.
