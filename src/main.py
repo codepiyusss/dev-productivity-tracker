@@ -453,10 +453,12 @@ def main():
             print(format_task_line(task))
 
     elif args.command == "complete":
-        print(
-            "Task completed." if manager.complete_task(args.task_id)
-            else "Task not found."
-        )
+        if manager.complete_task(args.task_id):
+            print("Task completed.")
+            for item in GoalTracker(manager.database).get_all_progress():
+                print(format_progress(item))
+        else:
+            print("Task not found.")
 
     elif args.command == "delete":
         print(
