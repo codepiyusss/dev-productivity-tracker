@@ -39,9 +39,20 @@ class Database:
                     category TEXT NOT NULL DEFAULT 'general',
                     due_date TEXT,
                     completed INTEGER NOT NULL DEFAULT 0,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    completed_at TEXT
                 )
             """)
+            # Migration: databases created before completion times were
+            # tracked get the new column; existing rows keep NULL.
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(tasks)")
+            }
+            if "completed_at" not in columns:
+                connection.execute(
+                    "ALTER TABLE tasks ADD COLUMN completed_at TEXT"
+                )
             # Migration: tags live in their own table, so existing
             # databases upgrade safely without altering the tasks table.
             connection.execute("""
@@ -63,13 +74,13 @@ class Database:
             cursor = connection.execute("""
                 INSERT INTO tasks (
                     title, description, priority, category,
-                    due_date, completed, created_at
+                    due_date, completed, created_at, completed_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 task.title, task.description, task.priority,
                 task.category, task.due_date, int(task.completed),
-                task.created_at
+                task.created_at, task.completed_at
             ))
             task.task_id = cursor.lastrowid
             self._save_tags(connection, task.task_id, task.tags)
@@ -114,12 +125,13 @@ class Database:
             cursor = connection.execute("""
                 UPDATE tasks
                 SET title = ?, description = ?, priority = ?,
-                    category = ?, due_date = ?, completed = ?
+                    category = ?, due_date = ?, completed = ?,
+                    completed_at = ?
                 WHERE task_id = ?
             """, (
                 task.title, task.description, task.priority,
                 task.category, task.due_date, int(task.completed),
-                task.task_id
+                task.completed_at, task.task_id
             ))
 
             if cursor.rowcount > 0:
@@ -186,5 +198,6 @@ class Database:
             due_date=row["due_date"],
             completed=bool(row["completed"]),
             created_at=row["created_at"],
+            completed_at=row["completed_at"],
             tags=tags or []
         )
