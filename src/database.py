@@ -68,6 +68,13 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_task_tags_tag "
                 "ON task_tags (tag)"
             )
+            # Migration: productivity goals (one target per period).
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS goals (
+                    period TEXT PRIMARY KEY,
+                    target INTEGER NOT NULL CHECK (target > 0)
+                )
+            """)
 
     def add_task(self, task: Task) -> Task:
         with self._connect() as connection:
@@ -143,6 +150,35 @@ class Database:
         with self._connect() as connection:
             cursor = connection.execute(
                 "DELETE FROM tasks WHERE task_id = ?", (task_id,)
+            )
+        return cursor.rowcount > 0
+
+    def set_goal(self, period: str, target: int) -> None:
+        """Create or replace the completion target for a period."""
+        with self._connect() as connection:
+            connection.execute("""
+                INSERT INTO goals (period, target) VALUES (?, ?)
+                ON CONFLICT(period) DO UPDATE SET target = excluded.target
+            """, (period, target))
+
+    def get_goal(self, period: str) -> Optional[int]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT target FROM goals WHERE period = ?", (period,)
+            ).fetchone()
+        return row["target"] if row else None
+
+    def get_goals(self) -> Dict[str, int]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT period, target FROM goals ORDER BY period"
+            ).fetchall()
+        return {row["period"]: row["target"] for row in rows}
+
+    def clear_goal(self, period: str) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM goals WHERE period = ?", (period,)
             )
         return cursor.rowcount > 0
 
