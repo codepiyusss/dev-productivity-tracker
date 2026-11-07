@@ -13,8 +13,44 @@ from src.journal import ProductivityJournal
 from src.exporter import export_tasks
 from src.goals import PERIODS, GoalTracker, format_progress
 from src.importer import import_tasks_csv
-from src.utils import parse_tag_string
+from src.utils import parse_tag_string, validate_due_date
 from datetime import date, timedelta
+
+
+def positive_int(value):
+    """argparse type: a whole number of at least 1."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{value}' is not a whole number")
+
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"{number} must be at least 1")
+
+    return number
+
+
+def non_negative_int(value):
+    """argparse type: a whole number of at least 0."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{value}' is not a whole number")
+
+    if number < 0:
+        raise argparse.ArgumentTypeError(f"{number} cannot be negative")
+
+    return number
+
+
+def valid_date(value):
+    """argparse type: a real date, returned as YYYY-MM-DD."""
+    try:
+        return validate_due_date(value) or ""
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"invalid date '{value}' (use YYYY-MM-DD)"
+        )
 
 
 EXAMPLES = """examples:
@@ -48,7 +84,7 @@ def build_parser():
     add.add_argument("--priority", choices=["low", "medium", "high"], default="medium")
     add.add_argument("--category", default="general")
     add.add_argument("--description", default="")
-    add.add_argument("--due-date")
+    add.add_argument("--due-date", type=valid_date, help="YYYY-MM-DD")
     add.add_argument("--tags", help="Comma-separated tags, e.g. work,urgent")
 
     list_parser = commands.add_parser("list", help="List and filter tasks")
@@ -92,11 +128,11 @@ def build_parser():
     tag_commands = tag.add_subparsers(dest="tag_command", required=True)
 
     tag_add = tag_commands.add_parser("add", help="Add tags to a task")
-    tag_add.add_argument("task_id", type=int)
+    tag_add.add_argument("task_id", type=positive_int)
     tag_add.add_argument("tags", help="Comma-separated tags")
 
     tag_remove = tag_commands.add_parser("remove", help="Remove tags from a task")
-    tag_remove.add_argument("task_id", type=int)
+    tag_remove.add_argument("task_id", type=positive_int)
     tag_remove.add_argument("tags", help="Comma-separated tags")
 
     tag_commands.add_parser("list", help="List all tags with task counts")
@@ -133,10 +169,10 @@ def build_parser():
     )
 
     complete = commands.add_parser("complete", help="Complete a task")
-    complete.add_argument("task_id", type=int)
+    complete.add_argument("task_id", type=positive_int)
 
     delete = commands.add_parser("delete", help="Delete a task")
-    delete.add_argument("task_id", type=int)
+    delete.add_argument("task_id", type=positive_int)
 
     report = commands.add_parser("report", help="Export productivity report")
     report.add_argument("--output", default="productivity_report.txt")
@@ -149,35 +185,37 @@ def build_parser():
     )
 
     journal_add = journal_commands.add_parser("add", help="Create journal entry")
-    journal_add.add_argument("--date", dest="entry_date")
+    journal_add.add_argument(
+        "--date", dest="entry_date", type=valid_date, help="YYYY-MM-DD (default: today)"
+    )
     journal_add.add_argument("--achievements", default="")
     journal_add.add_argument("--challenges", default="")
     journal_add.add_argument("--next-steps", default="")
 
     journal_show = journal_commands.add_parser("show", help="View journal entry")
-    journal_show.add_argument("entry_date")
+    journal_show.add_argument("entry_date", type=valid_date)
 
     journal_list = journal_commands.add_parser("list", help="List journal entries")
-    journal_list.add_argument("--limit", type=int, default=7)
+    journal_list.add_argument("--limit", type=positive_int, default=7)
     journal_list.add_argument("--search")
-    journal_list.add_argument("--from-date")
-    journal_list.add_argument("--to-date")
+    journal_list.add_argument("--from-date", type=valid_date)
+    journal_list.add_argument("--to-date", type=valid_date)
 
     journal_update = journal_commands.add_parser("update", help="Update journal entry")
-    journal_update.add_argument("entry_date")
+    journal_update.add_argument("entry_date", type=valid_date)
     journal_update.add_argument("--achievements")
     journal_update.add_argument("--challenges")
     journal_update.add_argument("--next-steps")
 
     journal_delete = journal_commands.add_parser("delete", help="Delete journal entry")
-    journal_delete.add_argument("entry_date")
+    journal_delete.add_argument("entry_date", type=valid_date)
     reminders = commands.add_parser(
         "reminders",
         help="Show overdue tasks and upcoming due dates"
     )
     reminders.add_argument(
         "--days",
-        type=int,
+        type=non_negative_int,
         default=7,
         help="Show tasks due within the next N days"
     )
