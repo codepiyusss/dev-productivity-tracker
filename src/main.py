@@ -171,6 +171,12 @@ def build_parser():
     complete = commands.add_parser("complete", help="Complete a task")
     complete.add_argument("task_id", type=positive_int)
 
+    show = commands.add_parser("show", help="Show all details of one task")
+    show.add_argument("task_id", type=positive_int)
+
+    reopen = commands.add_parser("reopen", help="Move a completed task back to pending")
+    reopen.add_argument("task_id", type=positive_int)
+
     edit = commands.add_parser("edit", help="Change fields of an existing task")
     edit.add_argument("task_id", type=positive_int)
     edit.add_argument("--title")
@@ -364,6 +370,52 @@ def handle_edit(manager, args):
 
     print(f"Task {task.task_id} updated.")
     print(format_task_line(task))
+    return 0
+
+
+def format_task_details(task):
+    """Multi-line view of a single task."""
+    if task.completed:
+        status = f"Completed ({task.completed_at})" if task.completed_at else "Completed"
+    else:
+        status = "Pending"
+
+    return "\n".join([
+        f"Task {task.task_id}: {task.title}",
+        f"  Status:      {status}",
+        f"  Priority:    {task.priority}",
+        f"  Category:    {task.category}",
+        f"  Due date:    {task.due_date or 'none'}",
+        f"  Tags:        {' '.join('#' + tag for tag in task.tags) or 'none'}",
+        f"  Created:     {task.created_at}",
+        f"  Description: {task.description or 'none'}",
+    ])
+
+
+def handle_show(manager, args):
+    task = manager.get_task(args.task_id)
+
+    if task is None:
+        print("Task not found.")
+        return 1
+
+    print(format_task_details(task))
+    return 0
+
+
+def handle_reopen(manager, args):
+    task = manager.get_task(args.task_id)
+
+    if task is None:
+        print("Task not found.")
+        return 1
+
+    if not task.completed:
+        print(f"Task {task.task_id} is already pending.")
+        return 0
+
+    manager.reopen_task(args.task_id)
+    print(f"Task {task.task_id} reopened.")
     return 0
 
 
@@ -562,6 +614,12 @@ def main(argv=None):
 
     if args.command == "edit":
         return handle_edit(manager, args)
+
+    if args.command == "show":
+        return handle_show(manager, args)
+
+    if args.command == "reopen":
+        return handle_reopen(manager, args)
 
     if args.command == "add":
         try:
