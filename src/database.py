@@ -68,6 +68,28 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_task_tags_tag "
                 "ON task_tags (tag)"
             )
+            # Migration: time tracking. At most one entry may be running
+            # (ended_at IS NULL) at any moment; the partial unique index
+            # enforces that in the database itself.
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS time_entries (
+                    entry_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id INTEGER NOT NULL,
+                    started_at TEXT NOT NULL,
+                    ended_at TEXT,
+                    CHECK (ended_at IS NULL OR ended_at >= started_at),
+                    FOREIGN KEY (task_id) REFERENCES tasks (task_id)
+                        ON DELETE CASCADE
+                )
+            """)
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_one_running_timer "
+                "ON time_entries ((ended_at IS NULL)) WHERE ended_at IS NULL"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_time_entries_task "
+                "ON time_entries (task_id)"
+            )
             # Migration: productivity goals (one target per period).
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS goals (
@@ -150,6 +172,73 @@ class Database:
         with self._connect() as connection:
             cursor = connection.execute(
                 "DELETE FROM tasks WHERE task_id = ?", (task_id,)
+            )
+        return cursor.rowcount > 0
+
+    def add_time_entry(
+        self, task_id: int, started_at: str, ended_at: Optional[str] = None
+    ) -> Dict:
+        """Insert a time entry. An entry without ended_at is a running timer."""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "INSERT INTO time_entries (task_id, started_at, ended_at) "
+                "VALUES (?, ?, ?)",
+                (task_id, started_at, ended_at)
+            )
+        return {
+            "entry_id": cursor.lastrowid, "task_id": task_id,
+            "started_at": started_at, "ended_at": ended_at,
+        }
+
+    def get_running_entry(self) -> Optional[Dict]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM time_entries WHERE ended_at IS NULL"
+            ).fetchone()
+        return dict(row) if row else None
+
+    def end_time_entry(self, entry_id: int, ended_at: str) -> bool:
+        """Stop a running entry. Returns False if it is missing or finished."""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE time_entries SET ended_at = ? "
+                "WHERE entry_id = ? AND ended_at IS NULL",
+                (ended_at, entry_id)
+            )
+        return cursor.rowcount > 0
+
+    def get_time_entries(
+        self,
+        task_id: Optional[int] = None,
+        since: Optional[str] = None,
+        until: Optional[str] = None
+    ) -> List[Dict]:
+        """Entries oldest first, optionally limited by task and start time."""
+        query = "SELECT * FROM time_entries WHERE 1 = 1"
+        parameters = []
+
+        if task_id is not None:
+            query += " AND task_id = ?"
+            parameters.append(task_id)
+
+        if since is not None:
+            query += " AND started_at >= ?"
+            parameters.append(since)
+
+        if until is not None:
+            query += " AND started_at < ?"
+            parameters.append(until)
+
+        query += " ORDER BY started_at, entry_id"
+
+        with self._connect() as connection:
+            rows = connection.execute(query, parameters).fetchall()
+        return [dict(row) for row in rows]
+
+    def delete_time_entry(self, entry_id: int) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM time_entries WHERE entry_id = ?", (entry_id,)
             )
         return cursor.rowcount > 0
 
