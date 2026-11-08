@@ -193,6 +193,14 @@ def build_parser():
     )
     timer_commands.add_parser("status", help="Show the running timer")
 
+    timer_delete = timer_commands.add_parser(
+        "delete", help="Delete a time entry (IDs are shown by 'timer list')"
+    )
+    timer_delete.add_argument("entry_id", type=positive_int)
+    timer_delete.add_argument(
+        "-y", "--yes", action="store_true", help="Delete without asking"
+    )
+
     timer_summary = timer_commands.add_parser(
         "summary", help="Total time by day, category and task"
     )
@@ -557,6 +565,22 @@ def handle_timer(manager, args):
                 f"{task.task_id}: {task.title}\n"
                 f"Total on this task: {format_duration(total)}"
             )
+
+        elif args.timer_command == "delete":
+            entry = manager.database.get_time_entry(args.entry_id)
+
+            if entry is None:
+                print(f"Time entry {args.entry_id} not found.")
+                return 1
+
+            if not args.yes and not confirm(
+                f"Delete time entry {args.entry_id}? This cannot be undone."
+            ):
+                print("Cancelled. Nothing was deleted.")
+                return 0
+
+            manager.database.delete_time_entry(args.entry_id)
+            print(f"Time entry {args.entry_id} deleted.")
 
         elif args.timer_command == "summary":
             summary = tracker.get_summary(days=args.days)

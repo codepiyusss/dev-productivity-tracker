@@ -235,6 +235,13 @@ class Database:
             rows = connection.execute(query, parameters).fetchall()
         return [dict(row) for row in rows]
 
+    def get_time_entry(self, entry_id: int) -> Optional[Dict]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM time_entries WHERE entry_id = ?", (entry_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
     def delete_time_entry(self, entry_id: int) -> bool:
         with self._connect() as connection:
             cursor = connection.execute(
