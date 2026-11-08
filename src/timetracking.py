@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from typing import Dict, Optional
 
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
@@ -39,6 +39,38 @@ class TimeTracker:
         except sqlite3.IntegrityError:
             # Another process started a timer between the check and insert.
             raise ValueError("A timer is already running. Stop it first.")
+
+    def log_manual(
+        self,
+        task_id: int,
+        seconds: int,
+        day: Optional[date] = None,
+        now: Optional[datetime] = None
+    ) -> Dict:
+        """Record time that was not tracked with a timer.
+
+        Without `day` (or for today) the time ends now. For an earlier day
+        the entry is placed at 09:00 on that day. Future days are rejected.
+        """
+        now = now or datetime.now()
+
+        if self.database.get_task(task_id) is None:
+            raise ValueError(f"Task {task_id} not found.")
+
+        if seconds <= 0:
+            raise ValueError("Duration must be greater than zero.")
+
+        if day is not None and day > now.date():
+            raise ValueError("Cannot log time on a future date.")
+
+        if day is None or day == now.date():
+            ended = now
+            started = ended - timedelta(seconds=seconds)
+        else:
+            started = datetime.combine(day, time(9, 0))
+            ended = started + timedelta(seconds=seconds)
+
+        return self.database.add_time_entry(task_id, _stamp(started), _stamp(ended))
 
     def status(self, now: Optional[datetime] = None) -> Optional[Dict]:
         """Details of the running timer, or None if nothing is running."""
