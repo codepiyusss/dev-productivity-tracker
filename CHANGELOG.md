@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Add time tracking: `timer start`, `stop`, `status`, `log`, `list`, `summary` and `delete`.
+- Add a `time_entries` table (created automatically on existing databases); only one timer can run at a time.
+- Completing a task stops its running timer; `show` displays time spent; the detailed report has a TIME TRACKING section.
+- Add `export --include-time` to add a `time_spent_seconds` column.
 - Add `edit`, `show` and `reopen` commands; `delete` now asks for confirmation (skip with `--yes`).
 - Validate due dates (real YYYY-MM-DD dates only), task IDs, journal dates and counts with clear error messages.
 - Fix: invalid due dates such as `31-12-2026` were silently accepted when adding or updating a task.

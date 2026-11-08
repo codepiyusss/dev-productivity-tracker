@@ -13,7 +13,12 @@ from src.journal import ProductivityJournal
 from src.exporter import export_tasks
 from src.goals import PERIODS, GoalTracker, format_progress
 from src.importer import import_tasks_csv
-from src.utils import parse_tag_string, validate_due_date
+from src.timetracking import (
+    STALE_AFTER_SECONDS, TimeTracker, format_time_summary
+)
+from src.utils import (
+    format_duration, parse_duration, parse_tag_string, validate_due_date
+)
 from datetime import date, timedelta
 
 
@@ -41,6 +46,14 @@ def non_negative_int(value):
         raise argparse.ArgumentTypeError(f"{number} cannot be negative")
 
     return number
+
+
+def duration_seconds(value):
+    """argparse type: '45', '45m', '1h30m' or '1:30', returned as seconds."""
+    try:
+        return parse_duration(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error))
 
 
 def valid_date(value):
@@ -111,6 +124,10 @@ def build_parser():
     export.add_argument("--priority", choices=["low", "medium", "high"])
     export.add_argument("--category")
     export.add_argument("--tag", action="append", help="Only export tasks with this tag")
+    export.add_argument(
+        "--include-time", action="store_true",
+        help="Add a time_spent_seconds column from the time tracker"
+    )
 
     import_parser = commands.add_parser("import", help="Import tasks from a CSV file")
     import_parser.add_argument("csv_file")
@@ -156,6 +173,51 @@ def build_parser():
     )
     streak.add_argument(
         "--json", action="store_true", help="Print the streak data as JSON"
+    )
+
+    timer = commands.add_parser("timer", help="Track time spent on tasks")
+    timer_commands = timer.add_subparsers(dest="timer_command", required=True)
+
+    timer_start = timer_commands.add_parser("start", help="Start a timer on a task")
+    timer_start.add_argument("task_id", type=positive_int)
+
+    timer_commands.add_parser("stop", help="Stop the running timer")
+
+    timer_log = timer_commands.add_parser(
+        "log", help="Record time you did not track with a timer"
+    )
+    timer_log.add_argument("task_id", type=positive_int)
+    timer_log.add_argument(
+        "duration", type=duration_seconds,
+        help="e.g. 45, 45m, 1h30m or 1:30 (a bare number means minutes)"
+    )
+    timer_log.add_argument(
+        "--date", dest="log_date", type=valid_date,
+        help="Day the work happened, YYYY-MM-DD (default: today)"
+    )
+    timer_commands.add_parser("status", help="Show the running timer")
+
+    timer_delete = timer_commands.add_parser(
+        "delete", help="Delete a time entry (IDs are shown by 'timer list')"
+    )
+    timer_delete.add_argument("entry_id", type=positive_int)
+    timer_delete.add_argument(
+        "-y", "--yes", action="store_true", help="Delete without asking"
+    )
+
+    timer_summary = timer_commands.add_parser(
+        "summary", help="Total time by day, category and task"
+    )
+    timer_summary.add_argument("--days", type=positive_int, default=7)
+    timer_summary.add_argument(
+        "--json", action="store_true", help="Print the summary as JSON"
+    )
+
+    timer_list = timer_commands.add_parser("list", help="List recorded time entries")
+    timer_list.add_argument("--task", dest="task_id", type=positive_int)
+    timer_list.add_argument(
+        "--days", type=positive_int, default=7,
+        help="How many days back to show (default: 7)"
     )
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
@@ -281,7 +343,11 @@ def handle_export(manager, args):
             tags=args.tag
         )
         output = args.output or f"tasks_export.{args.format}"
-        path = export_tasks(tasks, output, args.format)
+        time_totals = (
+            TimeTracker(manager.database).totals_by_task()
+            if args.include_time else None
+        )
+        path = export_tasks(tasks, output, args.format, time_totals)
     except (ValueError, OSError) as error:
         print(f"Could not export tasks: {error}")
         return
@@ -391,14 +457,14 @@ def handle_edit(manager, args):
     return 0
 
 
-def format_task_details(task):
+def format_task_details(task, tracked_seconds=0, timer_running=False):
     """Multi-line view of a single task."""
     if task.completed:
         status = f"Completed ({task.completed_at})" if task.completed_at else "Completed"
     else:
         status = "Pending"
 
-    return "\n".join([
+    lines = [
         f"Task {task.task_id}: {task.title}",
         f"  Status:      {status}",
         f"  Priority:    {task.priority}",
@@ -407,7 +473,13 @@ def format_task_details(task):
         f"  Tags:        {' '.join('#' + tag for tag in task.tags) or 'none'}",
         f"  Created:     {task.created_at}",
         f"  Description: {task.description or 'none'}",
-    ])
+    ]
+
+    if tracked_seconds or timer_running:
+        tracked = format_duration(tracked_seconds)
+        lines.insert(7, f"  Time spent:  {tracked}" + (" (timer running)" if timer_running else ""))
+
+    return "\n".join(lines)
 
 
 def handle_show(manager, args):
@@ -417,7 +489,13 @@ def handle_show(manager, args):
         print("Task not found.")
         return 1
 
-    print(format_task_details(task))
+    tracker = TimeTracker(manager.database)
+    running = manager.database.get_running_entry()
+    print(format_task_details(
+        task,
+        tracked_seconds=tracker.total_seconds(task.task_id),
+        timer_running=bool(running and running["task_id"] == task.task_id),
+    ))
     return 0
 
 
@@ -462,6 +540,108 @@ def handle_reopen(manager, args):
 
     manager.reopen_task(args.task_id)
     print(f"Task {task.task_id} reopened.")
+    return 0
+
+
+def format_time_entry(entry):
+    """One line: '#4 2026-11-10 09:00-09:45 | 45m | task 1: Write docs'."""
+    start = entry["started_at"]
+    end = entry["ended_at"][11:16] if entry["ended_at"] else "now"
+    suffix = " (running)" if not entry["ended_at"] else ""
+
+    return (
+        f"#{entry['entry_id']} {start[:10]} {start[11:16]}-{end} | "
+        f"{format_duration(entry['seconds'])} | "
+        f"task {entry['task_id']}: {entry['title']}{suffix}"
+    )
+
+
+def handle_timer(manager, args):
+    tracker = TimeTracker(manager.database)
+
+    try:
+        if args.timer_command == "start":
+            entry = tracker.start(args.task_id)
+            task = manager.get_task(entry["task_id"])
+            print(f"Timer started on task {task.task_id}: {task.title}")
+
+        elif args.timer_command == "stop":
+            entry = tracker.stop()
+            task = manager.get_task(entry["task_id"])
+            total = tracker.total_seconds(entry["task_id"])
+            print(
+                f"Stopped timer on task {task.task_id}: {task.title}\n"
+                f"Time: {format_duration(entry['seconds'])} | "
+                f"Total on this task: {format_duration(total)}"
+            )
+
+        elif args.timer_command == "log":
+            day = date.fromisoformat(args.log_date) if args.log_date else None
+            tracker.log_manual(args.task_id, args.duration, day=day)
+            task = manager.get_task(args.task_id)
+            total = tracker.total_seconds(args.task_id)
+            print(
+                f"Logged {format_duration(args.duration)} on task "
+                f"{task.task_id}: {task.title}\n"
+                f"Total on this task: {format_duration(total)}"
+            )
+
+        elif args.timer_command == "delete":
+            entry = manager.database.get_time_entry(args.entry_id)
+
+            if entry is None:
+                print(f"Time entry {args.entry_id} not found.")
+                return 1
+
+            if not args.yes and not confirm(
+                f"Delete time entry {args.entry_id}? This cannot be undone."
+            ):
+                print("Cancelled. Nothing was deleted.")
+                return 0
+
+            manager.database.delete_time_entry(args.entry_id)
+            print(f"Time entry {args.entry_id} deleted.")
+
+        elif args.timer_command == "summary":
+            summary = tracker.get_summary(days=args.days)
+
+            if args.json:
+                print(json.dumps(summary, indent=2))
+            else:
+                print(format_time_summary(summary))
+
+        elif args.timer_command == "list":
+            entries = tracker.list_entries(args.task_id, args.days)
+
+            if not entries:
+                print(f"No time entries in the last {args.days} day(s).")
+                return 0
+
+            for entry in entries:
+                print(format_time_entry(entry))
+
+        elif args.timer_command == "status":
+            status = tracker.status()
+
+            if status is None:
+                print("No timer is running.")
+                return 0
+
+            print(
+                f"Timer running on task {status['task_id']}: {status['title']} "
+                f"({format_duration(status['seconds'])})"
+            )
+            if status["stale"]:
+                print(
+                    f"Warning: this timer has been running for over "
+                    f"{STALE_AFTER_SECONDS // 3600} hours. "
+                    "Use 'timer stop' if you forgot it."
+                )
+
+    except ValueError as error:
+        print(error)
+        return 1
+
     return 0
 
 
@@ -676,6 +856,9 @@ def _run(argv=None):
     if args.command == "edit":
         return handle_edit(manager, args)
 
+    if args.command == "timer":
+        return handle_timer(manager, args)
+
     if args.command == "show":
         return handle_show(manager, args)
 
@@ -724,8 +907,15 @@ def _run(argv=None):
             print(format_task_line(task))
 
     elif args.command == "complete":
+        stopped = None
+        running = manager.database.get_running_entry()
+        if running and running["task_id"] == args.task_id:
+            stopped = TimeTracker(manager.database).stop()
+
         if manager.complete_task(args.task_id):
             print("Task completed.")
+            if stopped:
+                print(f"Timer stopped automatically ({format_duration(stopped['seconds'])}).")
             for item in GoalTracker(manager.database).get_all_progress():
                 print(format_progress(item))
             print(describe_streak(manager))

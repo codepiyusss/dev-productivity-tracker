@@ -60,3 +60,19 @@ python -m src.main --db work.db list # use another database file
 
 Dates must be real `YYYY-MM-DD` dates. Commands exit with code 0 on success and 1 on
 failure (for example, a task that does not exist), so they can be used in scripts.
+
+## Time tracking
+
+```
+python -m src.main timer start 3          # start a timer on task 3
+python -m src.main timer status
+python -m src.main timer stop
+python -m src.main timer log 3 1h30m --date 2026-11-08   # add untracked time
+python -m src.main timer list --days 7
+python -m src.main timer summary          # by day, category and task
+python -m src.main timer delete 12        # remove a mistaken entry
+python -m src.main export --include-time  # add time_spent_seconds to exports
+```
+
+Only one timer runs at a time. A timer running for more than 12 hours is flagged in
+`timer status`. Completing a task stops its timer automatically.
