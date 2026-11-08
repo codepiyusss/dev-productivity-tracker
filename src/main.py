@@ -13,7 +13,9 @@ from src.journal import ProductivityJournal
 from src.exporter import export_tasks
 from src.goals import PERIODS, GoalTracker, format_progress
 from src.importer import import_tasks_csv
-from src.timetracking import STALE_AFTER_SECONDS, TimeTracker
+from src.timetracking import (
+    STALE_AFTER_SECONDS, TimeTracker, format_time_summary
+)
 from src.utils import (
     format_duration, parse_duration, parse_tag_string, validate_due_date
 )
@@ -190,6 +192,14 @@ def build_parser():
         help="Day the work happened, YYYY-MM-DD (default: today)"
     )
     timer_commands.add_parser("status", help="Show the running timer")
+
+    timer_summary = timer_commands.add_parser(
+        "summary", help="Total time by day, category and task"
+    )
+    timer_summary.add_argument("--days", type=positive_int, default=7)
+    timer_summary.add_argument(
+        "--json", action="store_true", help="Print the summary as JSON"
+    )
 
     timer_list = timer_commands.add_parser("list", help="List recorded time entries")
     timer_list.add_argument("--task", dest="task_id", type=positive_int)
@@ -547,6 +557,14 @@ def handle_timer(manager, args):
                 f"{task.task_id}: {task.title}\n"
                 f"Total on this task: {format_duration(total)}"
             )
+
+        elif args.timer_command == "summary":
+            summary = tracker.get_summary(days=args.days)
+
+            if args.json:
+                print(json.dumps(summary, indent=2))
+            else:
+                print(format_time_summary(summary))
 
         elif args.timer_command == "list":
             entries = tracker.list_entries(args.task_id, args.days)

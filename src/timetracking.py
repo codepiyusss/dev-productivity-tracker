@@ -211,3 +211,39 @@ def entry_seconds(entry: Dict, now: Optional[datetime] = None) -> int:
         ended = now or datetime.now()
 
     return max(int((ended - started).total_seconds()), 0)
+
+
+def format_time_summary(summary: Dict, top_tasks: int = 5) -> str:
+    """Readable text for a summary from `TimeTracker.get_summary`."""
+    from src.utils import format_duration
+
+    entries = summary["entry_count"]
+    lines = [
+        f"Time tracked in the last {summary['days']} day(s): "
+        f"{format_duration(summary['total_seconds'])} "
+        f"({entries} {'entry' if entries == 1 else 'entries'})"
+    ]
+
+    if not entries:
+        return lines[0]
+
+    lines.append("")
+    lines.append("By day:")
+    for day in summary["by_day"]:
+        shown = format_duration(day["seconds"]) if day["seconds"] else "-"
+        lines.append(f"  {day['date']}  {shown}")
+
+    lines.append("")
+    lines.append("By category:")
+    for item in summary["by_category"]:
+        lines.append(f"  {item['category']}: {format_duration(item['seconds'])}")
+
+    lines.append("")
+    lines.append(f"Top tasks:")
+    for item in summary["by_task"][:top_tasks]:
+        lines.append(
+            f"  [{item['task_id']}] {item['title']}: "
+            f"{format_duration(item['seconds'])}"
+        )
+
+    return "\n".join(lines)
