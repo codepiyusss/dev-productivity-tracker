@@ -13,7 +13,8 @@ from src.journal import ProductivityJournal
 from src.exporter import export_tasks
 from src.goals import PERIODS, GoalTracker, format_progress
 from src.importer import import_tasks_csv
-from src.utils import parse_tag_string, validate_due_date
+from src.timetracking import STALE_AFTER_SECONDS, TimeTracker
+from src.utils import format_duration, parse_tag_string, validate_due_date
 from datetime import date, timedelta
 
 
@@ -157,6 +158,15 @@ def build_parser():
     streak.add_argument(
         "--json", action="store_true", help="Print the streak data as JSON"
     )
+
+    timer = commands.add_parser("timer", help="Track time spent on tasks")
+    timer_commands = timer.add_subparsers(dest="timer_command", required=True)
+
+    timer_start = timer_commands.add_parser("start", help="Start a timer on a task")
+    timer_start.add_argument("task_id", type=positive_int)
+
+    timer_commands.add_parser("stop", help="Stop the running timer")
+    timer_commands.add_parser("status", help="Show the running timer")
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
     stats.add_argument(
@@ -465,6 +475,50 @@ def handle_reopen(manager, args):
     return 0
 
 
+def handle_timer(manager, args):
+    tracker = TimeTracker(manager.database)
+
+    try:
+        if args.timer_command == "start":
+            entry = tracker.start(args.task_id)
+            task = manager.get_task(entry["task_id"])
+            print(f"Timer started on task {task.task_id}: {task.title}")
+
+        elif args.timer_command == "stop":
+            entry = tracker.stop()
+            task = manager.get_task(entry["task_id"])
+            total = tracker.total_seconds(entry["task_id"])
+            print(
+                f"Stopped timer on task {task.task_id}: {task.title}\n"
+                f"Time: {format_duration(entry['seconds'])} | "
+                f"Total on this task: {format_duration(total)}"
+            )
+
+        elif args.timer_command == "status":
+            status = tracker.status()
+
+            if status is None:
+                print("No timer is running.")
+                return 0
+
+            print(
+                f"Timer running on task {status['task_id']}: {status['title']} "
+                f"({format_duration(status['seconds'])})"
+            )
+            if status["stale"]:
+                print(
+                    f"Warning: this timer has been running for over "
+                    f"{STALE_AFTER_SECONDS // 3600} hours. "
+                    "Use 'timer stop' if you forgot it."
+                )
+
+    except ValueError as error:
+        print(error)
+        return 1
+
+    return 0
+
+
 def handle_streak(manager, args):
     try:
         summary = StreakTracker(manager.database).get_summary(days=args.days)
@@ -675,6 +729,9 @@ def _run(argv=None):
 
     if args.command == "edit":
         return handle_edit(manager, args)
+
+    if args.command == "timer":
+        return handle_timer(manager, args)
 
     if args.command == "show":
         return handle_show(manager, args)
