@@ -81,6 +81,63 @@ class TimeTracker:
             for entry in self.database.get_time_entries(task_id=task_id)
         )
 
+    def get_summary(self, days: int = 7, now: Optional[datetime] = None) -> Dict:
+        """Time spent over the last `days` days, ending today.
+
+        Each entry counts on the day it started. A running timer is
+        included up to `now`.
+        """
+        if days < 1:
+            raise ValueError("days must be at least 1.")
+
+        now = now or datetime.now()
+        today = now.date()
+        first_day = today - timedelta(days=days - 1)
+        entries = self.database.get_time_entries(
+            since=_stamp(datetime.combine(first_day, time.min)),
+            until=_stamp(datetime.combine(today + timedelta(days=1), time.min)),
+        )
+
+        per_day = {first_day + timedelta(days=i): 0 for i in range(days)}
+        per_task: Dict[int, int] = {}
+
+        for entry in entries:
+            seconds = entry_seconds(entry, now)
+            per_day[_parse(entry["started_at"]).date()] += seconds
+            per_task[entry["task_id"]] = per_task.get(entry["task_id"], 0) + seconds
+
+        by_task = []
+        per_category: Dict[str, int] = {}
+
+        for task_id, seconds in per_task.items():
+            task = self.database.get_task(task_id)
+            by_task.append({
+                "task_id": task_id,
+                "title": task.title if task else "(deleted task)",
+                "seconds": seconds,
+            })
+            category = task.category if task else "unknown"
+            per_category[category] = per_category.get(category, 0) + seconds
+
+        by_task.sort(key=lambda item: (-item["seconds"], item["task_id"]))
+
+        return {
+            "days": days,
+            "total_seconds": sum(per_day.values()),
+            "entry_count": len(entries),
+            "by_day": [
+                {"date": day.isoformat(), "seconds": seconds}
+                for day, seconds in per_day.items()
+            ],
+            "by_task": by_task,
+            "by_category": [
+                {"category": name, "seconds": seconds}
+                for name, seconds in sorted(
+                    per_category.items(), key=lambda pair: (-pair[1], pair[0])
+                )
+            ],
+        }
+
     def status(self, now: Optional[datetime] = None) -> Optional[Dict]:
         """Details of the running timer, or None if nothing is running."""
         running = self.database.get_running_entry()
