@@ -191,6 +191,13 @@ def build_parser():
     )
     timer_commands.add_parser("status", help="Show the running timer")
 
+    timer_list = timer_commands.add_parser("list", help="List recorded time entries")
+    timer_list.add_argument("--task", dest="task_id", type=positive_int)
+    timer_list.add_argument(
+        "--days", type=positive_int, default=7,
+        help="How many days back to show (default: 7)"
+    )
+
     stats = commands.add_parser("stats", help="Show productivity statistics")
     stats.add_argument(
         "--detailed", action="store_true",
@@ -498,6 +505,19 @@ def handle_reopen(manager, args):
     return 0
 
 
+def format_time_entry(entry):
+    """One line: '#4 2026-11-10 09:00-09:45 | 45m | task 1: Write docs'."""
+    start = entry["started_at"]
+    end = entry["ended_at"][11:16] if entry["ended_at"] else "now"
+    suffix = " (running)" if not entry["ended_at"] else ""
+
+    return (
+        f"#{entry['entry_id']} {start[:10]} {start[11:16]}-{end} | "
+        f"{format_duration(entry['seconds'])} | "
+        f"task {entry['task_id']}: {entry['title']}{suffix}"
+    )
+
+
 def handle_timer(manager, args):
     tracker = TimeTracker(manager.database)
 
@@ -527,6 +547,16 @@ def handle_timer(manager, args):
                 f"{task.task_id}: {task.title}\n"
                 f"Total on this task: {format_duration(total)}"
             )
+
+        elif args.timer_command == "list":
+            entries = tracker.list_entries(args.task_id, args.days)
+
+            if not entries:
+                print(f"No time entries in the last {args.days} day(s).")
+                return 0
+
+            for entry in entries:
+                print(format_time_entry(entry))
 
         elif args.timer_command == "status":
             status = tracker.status()

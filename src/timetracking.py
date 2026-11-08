@@ -1,6 +1,6 @@
 import sqlite3
 from datetime import date, datetime, time, timedelta
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
 STALE_AFTER_SECONDS = 12 * 3600  # a timer this old was probably forgotten
@@ -71,6 +71,34 @@ class TimeTracker:
             ended = started + timedelta(seconds=seconds)
 
         return self.database.add_time_entry(task_id, _stamp(started), _stamp(ended))
+
+    def list_entries(
+        self,
+        task_id: Optional[int] = None,
+        days: int = 7,
+        now: Optional[datetime] = None
+    ) -> List[Dict]:
+        """Entries from the last `days` days, oldest first, with titles."""
+        if days < 1:
+            raise ValueError("days must be at least 1.")
+
+        now = now or datetime.now()
+        first_day = now.date() - timedelta(days=days - 1)
+        entries = self.database.get_time_entries(
+            task_id=task_id,
+            since=_stamp(datetime.combine(first_day, time.min))
+        )
+
+        result = []
+        for entry in entries:
+            task = self.database.get_task(entry["task_id"])
+            result.append({
+                **entry,
+                "title": task.title if task else "(deleted task)",
+                "seconds": entry_seconds(entry, now),
+            })
+
+        return result
 
     def total_seconds(self, task_id: int, now: Optional[datetime] = None) -> int:
         """All time recorded on a task, including a timer still running."""
