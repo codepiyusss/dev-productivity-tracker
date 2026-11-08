@@ -12,3 +12,4 @@
 - Completion streaks: current, longest and daily-goal streaks
 - Task editing, detail view and reopening
 - Input validation with clear CLI error messages
+- Time tracking with timers, manual entries and summaries
