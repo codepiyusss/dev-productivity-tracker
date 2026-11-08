@@ -449,14 +449,14 @@ def handle_edit(manager, args):
     return 0
 
 
-def format_task_details(task):
+def format_task_details(task, tracked_seconds=0, timer_running=False):
     """Multi-line view of a single task."""
     if task.completed:
         status = f"Completed ({task.completed_at})" if task.completed_at else "Completed"
     else:
         status = "Pending"
 
-    return "\n".join([
+    lines = [
         f"Task {task.task_id}: {task.title}",
         f"  Status:      {status}",
         f"  Priority:    {task.priority}",
@@ -465,7 +465,13 @@ def format_task_details(task):
         f"  Tags:        {' '.join('#' + tag for tag in task.tags) or 'none'}",
         f"  Created:     {task.created_at}",
         f"  Description: {task.description or 'none'}",
-    ])
+    ]
+
+    if tracked_seconds or timer_running:
+        tracked = format_duration(tracked_seconds)
+        lines.insert(7, f"  Time spent:  {tracked}" + (" (timer running)" if timer_running else ""))
+
+    return "\n".join(lines)
 
 
 def handle_show(manager, args):
@@ -475,7 +481,13 @@ def handle_show(manager, args):
         print("Task not found.")
         return 1
 
-    print(format_task_details(task))
+    tracker = TimeTracker(manager.database)
+    running = manager.database.get_running_entry()
+    print(format_task_details(
+        task,
+        tracked_seconds=tracker.total_seconds(task.task_id),
+        timer_running=bool(running and running["task_id"] == task.task_id),
+    ))
     return 0
 
 
