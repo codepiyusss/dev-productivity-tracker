@@ -14,7 +14,9 @@ from src.exporter import export_tasks
 from src.goals import PERIODS, GoalTracker, format_progress
 from src.importer import import_tasks_csv
 from src.timetracking import STALE_AFTER_SECONDS, TimeTracker
-from src.utils import format_duration, parse_tag_string, validate_due_date
+from src.utils import (
+    format_duration, parse_duration, parse_tag_string, validate_due_date
+)
 from datetime import date, timedelta
 
 
@@ -42,6 +44,14 @@ def non_negative_int(value):
         raise argparse.ArgumentTypeError(f"{number} cannot be negative")
 
     return number
+
+
+def duration_seconds(value):
+    """argparse type: '45', '45m', '1h30m' or '1:30', returned as seconds."""
+    try:
+        return parse_duration(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error))
 
 
 def valid_date(value):
@@ -166,6 +176,19 @@ def build_parser():
     timer_start.add_argument("task_id", type=positive_int)
 
     timer_commands.add_parser("stop", help="Stop the running timer")
+
+    timer_log = timer_commands.add_parser(
+        "log", help="Record time you did not track with a timer"
+    )
+    timer_log.add_argument("task_id", type=positive_int)
+    timer_log.add_argument(
+        "duration", type=duration_seconds,
+        help="e.g. 45, 45m, 1h30m or 1:30 (a bare number means minutes)"
+    )
+    timer_log.add_argument(
+        "--date", dest="log_date", type=valid_date,
+        help="Day the work happened, YYYY-MM-DD (default: today)"
+    )
     timer_commands.add_parser("status", help="Show the running timer")
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
@@ -491,6 +514,17 @@ def handle_timer(manager, args):
             print(
                 f"Stopped timer on task {task.task_id}: {task.title}\n"
                 f"Time: {format_duration(entry['seconds'])} | "
+                f"Total on this task: {format_duration(total)}"
+            )
+
+        elif args.timer_command == "log":
+            day = date.fromisoformat(args.log_date) if args.log_date else None
+            tracker.log_manual(args.task_id, args.duration, day=day)
+            task = manager.get_task(args.task_id)
+            total = tracker.total_seconds(args.task_id)
+            print(
+                f"Logged {format_duration(args.duration)} on task "
+                f"{task.task_id}: {task.title}\n"
                 f"Total on this task: {format_duration(total)}"
             )
 
