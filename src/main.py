@@ -899,8 +899,15 @@ def _run(argv=None):
             print(format_task_line(task))
 
     elif args.command == "complete":
+        stopped = None
+        running = manager.database.get_running_entry()
+        if running and running["task_id"] == args.task_id:
+            stopped = TimeTracker(manager.database).stop()
+
         if manager.complete_task(args.task_id):
             print("Task completed.")
+            if stopped:
+                print(f"Timer stopped automatically ({format_duration(stopped['seconds'])}).")
             for item in GoalTracker(manager.database).get_all_progress():
                 print(format_progress(item))
             print(describe_streak(manager))
