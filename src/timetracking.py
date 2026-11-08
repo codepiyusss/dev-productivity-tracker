@@ -38,3 +38,32 @@ class TimeTracker:
         except sqlite3.IntegrityError:
             # Another process started a timer between the check and insert.
             raise ValueError("A timer is already running. Stop it first.")
+
+    def stop(self, now: Optional[datetime] = None) -> Dict:
+        """Stop the running timer and return the finished entry."""
+        running = self.database.get_running_entry()
+
+        if running is None:
+            raise ValueError("No timer is running.")
+
+        started = _parse(running["started_at"])
+        ended = max(now or datetime.now(), started)  # never end before start
+        self.database.end_time_entry(running["entry_id"], _stamp(ended))
+
+        return {
+            **running,
+            "ended_at": _stamp(ended),
+            "seconds": entry_seconds({**running, "ended_at": _stamp(ended)}),
+        }
+
+
+def entry_seconds(entry: Dict, now: Optional[datetime] = None) -> int:
+    """Length of an entry in seconds. Running entries use `now`."""
+    started = _parse(entry["started_at"])
+
+    if entry["ended_at"]:
+        ended = _parse(entry["ended_at"])
+    else:
+        ended = now or datetime.now()
+
+    return max(int((ended - started).total_seconds()), 0)
