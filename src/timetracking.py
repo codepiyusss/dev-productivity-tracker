@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Dict, Optional
 
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
+STALE_AFTER_SECONDS = 12 * 3600  # a timer this old was probably forgotten
 
 
 def _stamp(moment: datetime) -> str:
@@ -38,6 +39,23 @@ class TimeTracker:
         except sqlite3.IntegrityError:
             # Another process started a timer between the check and insert.
             raise ValueError("A timer is already running. Stop it first.")
+
+    def status(self, now: Optional[datetime] = None) -> Optional[Dict]:
+        """Details of the running timer, or None if nothing is running."""
+        running = self.database.get_running_entry()
+
+        if running is None:
+            return None
+
+        task = self.database.get_task(running["task_id"])
+        seconds = entry_seconds(running, now)
+
+        return {
+            **running,
+            "title": task.title if task else "(deleted task)",
+            "seconds": seconds,
+            "stale": seconds >= STALE_AFTER_SECONDS,
+        }
 
     def stop(self, now: Optional[datetime] = None) -> Dict:
         """Stop the running timer and return the finished entry."""
