@@ -124,6 +124,10 @@ def build_parser():
     export.add_argument("--priority", choices=["low", "medium", "high"])
     export.add_argument("--category")
     export.add_argument("--tag", action="append", help="Only export tasks with this tag")
+    export.add_argument(
+        "--include-time", action="store_true",
+        help="Add a time_spent_seconds column from the time tracker"
+    )
 
     import_parser = commands.add_parser("import", help="Import tasks from a CSV file")
     import_parser.add_argument("csv_file")
@@ -339,7 +343,11 @@ def handle_export(manager, args):
             tags=args.tag
         )
         output = args.output or f"tasks_export.{args.format}"
-        path = export_tasks(tasks, output, args.format)
+        time_totals = (
+            TimeTracker(manager.database).totals_by_task()
+            if args.include_time else None
+        )
+        path = export_tasks(tasks, output, args.format, time_totals)
     except (ValueError, OSError) as error:
         print(f"Could not export tasks: {error}")
         return

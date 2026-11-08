@@ -100,6 +100,18 @@ class TimeTracker:
 
         return result
 
+    def totals_by_task(self, now: Optional[datetime] = None) -> Dict[int, int]:
+        """{task_id: seconds} for every task that has recorded time."""
+        now = now or datetime.now()
+        totals: Dict[int, int] = {}
+
+        for entry in self.database.get_time_entries():
+            totals[entry["task_id"]] = (
+                totals.get(entry["task_id"], 0) + entry_seconds(entry, now)
+            )
+
+        return totals
+
     def total_seconds(self, task_id: int, now: Optional[datetime] = None) -> int:
         """All time recorded on a task, including a timer still running."""
         now = now or datetime.now()
