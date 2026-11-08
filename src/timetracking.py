@@ -72,6 +72,15 @@ class TimeTracker:
 
         return self.database.add_time_entry(task_id, _stamp(started), _stamp(ended))
 
+    def total_seconds(self, task_id: int, now: Optional[datetime] = None) -> int:
+        """All time recorded on a task, including a timer still running."""
+        now = now or datetime.now()
+
+        return sum(
+            entry_seconds(entry, now)
+            for entry in self.database.get_time_entries(task_id=task_id)
+        )
+
     def status(self, now: Optional[datetime] = None) -> Optional[Dict]:
         """Details of the running timer, or None if nothing is running."""
         running = self.database.get_running_entry()
