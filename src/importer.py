@@ -6,6 +6,7 @@ from typing import List
 
 from src.constants import DATE_FORMAT
 from src.models.task import Task
+from src.recurrence import validate_rule
 from src.tasks import TaskManager
 from src.utils import parse_tag_string
 
@@ -13,7 +14,7 @@ TRUE_VALUES = {"yes", "y", "true", "1", "done", "completed"}
 FALSE_VALUES = {"no", "n", "false", "0", "", "pending"}
 KNOWN_COLUMNS = {
     "title", "description", "priority", "category",
-    "due_date", "completed", "tags",
+    "due_date", "completed", "tags", "recurrence",
 }
 
 
@@ -119,6 +120,9 @@ def import_tasks_csv(
                 due_date = _parse_due_date(values.get("due_date", ""))
                 completed = _parse_completed(values.get("completed", ""))
                 tags = _parse_tags(values.get("tags", ""))
+                recurrence = validate_rule(values.get("recurrence", ""))
+                if recurrence and not due_date:
+                    raise ValueError("repeating task needs a due date")
                 category = values.get("category") or "general"
                 priority = (values.get("priority") or "medium").casefold()
 
@@ -137,7 +141,8 @@ def import_tasks_csv(
                         priority=priority,
                         category=category,
                         due_date=due_date,
-                        tags=tags
+                        tags=tags,
+                        recurrence=recurrence
                     )
                     if completed:
                         manager.complete_task(task.task_id)
