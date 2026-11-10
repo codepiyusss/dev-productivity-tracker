@@ -337,6 +337,9 @@ def format_task_line(task, today=None):
         if not task.completed and is_overdue(task.due_date, today):
             line += " (OVERDUE)"
 
+    if task.recurrence:
+        line += f" | repeats {task.recurrence}"
+
     if task.tags:
         line += " | " + " ".join(f"#{tag}" for tag in task.tags)
 
@@ -484,6 +487,7 @@ def format_task_details(task, tracked_seconds=0, timer_running=False):
         f"  Priority:    {task.priority}",
         f"  Category:    {task.category}",
         f"  Due date:    {task.due_date or 'none'}",
+        f"  Repeats:     {task.recurrence or 'no'}",
         f"  Tags:        {' '.join('#' + tag for tag in task.tags) or 'none'}",
         f"  Created:     {task.created_at}",
         f"  Description: {task.description or 'none'}",
@@ -491,7 +495,7 @@ def format_task_details(task, tracked_seconds=0, timer_running=False):
 
     if tracked_seconds or timer_running:
         tracked = format_duration(tracked_seconds)
-        lines.insert(7, f"  Time spent:  {tracked}" + (" (timer running)" if timer_running else ""))
+        lines.insert(len(lines) - 1, f"  Time spent:  {tracked}" + (" (timer running)" if timer_running else ""))
 
     return "\n".join(lines)
 
