@@ -6,6 +6,7 @@ import sys
 from src.database import Database
 from src.tasks import TaskManager
 from src.analytics import ProductivityAnalytics
+from src.recurrence import RULES
 from src.reports import ProductivityReports
 from src.streaks import StreakTracker, format_streak_summary
 from src.task_filters import filter_tasks
@@ -99,6 +100,10 @@ def build_parser():
     add.add_argument("--description", default="")
     add.add_argument("--due-date", type=valid_date, help="YYYY-MM-DD")
     add.add_argument("--tags", help="Comma-separated tags, e.g. work,urgent")
+    add.add_argument(
+        "--repeat", choices=RULES,
+        help="Repeat the task after it is completed (needs --due-date)"
+    )
 
     list_parser = commands.add_parser("list", help="List and filter tasks")
     list_parser.add_argument("--search")
@@ -245,6 +250,11 @@ def build_parser():
     edit.add_argument("--description")
     edit.add_argument("--priority", choices=["low", "medium", "high"])
     edit.add_argument("--category")
+    repeat = edit.add_mutually_exclusive_group()
+    repeat.add_argument("--repeat", choices=RULES, help="Make the task repeat")
+    repeat.add_argument(
+        "--no-repeat", action="store_true", help="Stop the task repeating"
+    )
     due = edit.add_mutually_exclusive_group()
     due.add_argument("--due-date", type=valid_date, help="YYYY-MM-DD")
     due.add_argument(
@@ -326,6 +336,9 @@ def format_task_line(task, today=None):
 
         if not task.completed and is_overdue(task.due_date, today):
             line += " (OVERDUE)"
+
+    if task.recurrence:
+        line += f" | repeats {task.recurrence}"
 
     if task.tags:
         line += " | " + " ".join(f"#{tag}" for tag in task.tags)
@@ -427,15 +440,19 @@ def handle_edit(manager, args):
         "priority": args.priority,
         "category": args.category,
         "due_date": args.due_date,
+        "recurrence": args.repeat,
     }
     changes = {key: value for key, value in changes.items() if value is not None}
+
+    if args.no_repeat:
+        changes["recurrence"] = None
 
     if args.clear_due_date:
         changes["due_date"] = None
 
     if not changes:
         print("Nothing to change. Use --title, --description, --priority, "
-              "--category, --due-date or --clear-due-date.")
+              "--category, --due-date, --clear-due-date, --repeat or --no-repeat.")
         return 1
 
     if "category" in changes and not changes["category"].strip():
@@ -470,6 +487,7 @@ def format_task_details(task, tracked_seconds=0, timer_running=False):
         f"  Priority:    {task.priority}",
         f"  Category:    {task.category}",
         f"  Due date:    {task.due_date or 'none'}",
+        f"  Repeats:     {task.recurrence or 'no'}",
         f"  Tags:        {' '.join('#' + tag for tag in task.tags) or 'none'}",
         f"  Created:     {task.created_at}",
         f"  Description: {task.description or 'none'}",
@@ -477,7 +495,7 @@ def format_task_details(task, tracked_seconds=0, timer_running=False):
 
     if tracked_seconds or timer_running:
         tracked = format_duration(tracked_seconds)
-        lines.insert(7, f"  Time spent:  {tracked}" + (" (timer running)" if timer_running else ""))
+        lines.insert(len(lines) - 1, f"  Time spent:  {tracked}" + (" (timer running)" if timer_running else ""))
 
     return "\n".join(lines)
 
@@ -876,7 +894,8 @@ def _run(argv=None):
                 priority=args.priority,
                 category=args.category,
                 due_date=args.due_date,
-                tags=parse_tag_string(args.tags)
+                tags=parse_tag_string(args.tags),
+                recurrence=args.repeat
             )
         except ValueError as error:
             print(f"Could not create task: {error}")
@@ -912,8 +931,15 @@ def _run(argv=None):
         if running and running["task_id"] == args.task_id:
             stopped = TimeTracker(manager.database).stop()
 
-        if manager.complete_task(args.task_id):
+        done, following = manager.complete_with_recurrence(args.task_id)
+
+        if done:
             print("Task completed.")
+            if following:
+                print(
+                    f"Next occurrence created: [{following.task_id}] "
+                    f"{following.title} (due {following.due_date})"
+                )
             if stopped:
                 print(f"Timer stopped automatically ({format_duration(stopped['seconds'])}).")
             for item in GoalTracker(manager.database).get_all_progress():

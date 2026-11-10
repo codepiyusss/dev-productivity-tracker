@@ -8,6 +8,7 @@ from src.models.task import Task
 CSV_FIELDS = [
     "task_id", "title", "description", "priority", "category",
     "due_date", "completed", "created_at", "tags", "completed_at",
+    "recurrence",
 ]
 TAG_SEPARATOR = ";"
 SUPPORTED_FORMATS = ("csv", "json")
