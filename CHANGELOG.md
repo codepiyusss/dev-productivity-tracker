@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Add recurring tasks: `add --repeat daily|weekly|monthly`, and `edit --repeat` / `--no-repeat`.
+- Completing a repeating task creates the next occurrence (same title, priority, category and tags) with the next due date.
+- Repeating tasks require a due date; the schedule never leaves a pile of overdue copies after late completion.
+- Add a `recurrence` column to tasks (added automatically to existing databases); repeat rules show in `list` and `show` and round-trip through CSV and JSON export and CSV import.
 - Add time tracking: `timer start`, `stop`, `status`, `log`, `list`, `summary` and `delete`.
 - Add a `time_entries` table (created automatically on existing databases); only one timer can run at a time.
 - Completing a task stops its running timer; `show` displays time spent; the detailed report has a TIME TRACKING section.

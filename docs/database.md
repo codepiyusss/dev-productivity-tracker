@@ -37,3 +37,15 @@ run at once, even from two terminals. Entries are removed automatically when
 their task is deleted (`ON DELETE CASCADE`). Each entry counts toward the day
 it started. The table is created with `CREATE TABLE IF NOT EXISTS`, so existing
 databases upgrade without data loss.
+
+## Recurring tasks
+
+`tasks.recurrence` holds the repeat rule (`daily`, `weekly`, `monthly`) or `NULL`
+for tasks that do not repeat. The column is added to existing databases
+automatically. When a repeating task is completed through `complete`, a new task
+is created with the next due date: the schedule moves forward from the old due
+date one step at a time until it is after today, so finishing early gives the next
+regular date and finishing very late does not create overdue copies. Monthly
+repeats clamp to the end of short months (Jan 31 becomes Feb 28), and the shorter
+day carries forward. Reopening a completed task does not delete an occurrence that
+was already created.
