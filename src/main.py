@@ -927,8 +927,15 @@ def _run(argv=None):
         if running and running["task_id"] == args.task_id:
             stopped = TimeTracker(manager.database).stop()
 
-        if manager.complete_task(args.task_id):
+        done, following = manager.complete_with_recurrence(args.task_id)
+
+        if done:
             print("Task completed.")
+            if following:
+                print(
+                    f"Next occurrence created: [{following.task_id}] "
+                    f"{following.title} (due {following.due_date})"
+                )
             if stopped:
                 print(f"Timer stopped automatically ({format_duration(stopped['seconds'])}).")
             for item in GoalTracker(manager.database).get_all_progress():
