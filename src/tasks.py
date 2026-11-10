@@ -1,8 +1,9 @@
-﻿from typing import List, Optional
+﻿from datetime import date
+from typing import List, Optional, Tuple
 
 from src.database import Database
 from src.models.task import Task
-from src.recurrence import validate_rule
+from src.recurrence import next_due_date, validate_rule
 from src.utils import validate_due_date
 
 PRIORITIES = {"low", "medium", "high"}
@@ -155,6 +156,55 @@ class TaskManager:
 
         task.mark_completed()
         return self.database.update_task(task)
+
+    def complete_with_recurrence(
+        self, task_id: int, today: Optional[date] = None
+    ) -> Tuple[bool, Optional[Task]]:
+        """Complete a task and, if it repeats, create the next occurrence.
+
+        Returns (completed, next_task). `next_task` is None for tasks that do
+        not repeat, for tasks that were already completed, and when an
+        identical pending occurrence already exists (for example after
+        reopening and completing the same task again).
+        """
+        task = self.get_task(task_id)
+
+        if task is None:
+            return False, None
+
+        was_completed = task.completed
+        task.mark_completed()
+        self.database.update_task(task)
+
+        if was_completed or not task.recurrence or not task.due_date:
+            return True, None
+
+        try:
+            due = date.fromisoformat(task.due_date)
+        except ValueError:
+            return True, None  # unreadable legacy date: cannot schedule
+
+        next_due = next_due_date(due, task.recurrence, today).isoformat()
+
+        already_scheduled = any(
+            other.title == task.title
+            and other.category == task.category
+            and other.due_date == next_due
+            for other in self.database.get_all_tasks(completed=False)
+        )
+
+        if already_scheduled:
+            return True, None
+
+        return True, self.create_task(
+            task.title,
+            description=task.description,
+            priority=task.priority,
+            category=task.category,
+            due_date=next_due,
+            tags=list(task.tags),
+            recurrence=task.recurrence,
+        )
 
     def reopen_task(self, task_id: int) -> bool:
         """Move a completed task back to pending."""
