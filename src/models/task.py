@@ -16,6 +16,7 @@ class Task:
     task_id: Optional[int] = None
     created_at: str = ""
     completed_at: Optional[str] = None
+    recurrence: Optional[str] = None
     tags: List[str] = field(default_factory=list)
 
     def __post_init__(self):
@@ -77,6 +78,7 @@ class Task:
             "completed": self.completed,
             "created_at": self.created_at,
             "completed_at": self.completed_at,
+            "recurrence": self.recurrence,
             "tags": list(self.tags),
         }
 

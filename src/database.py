@@ -40,7 +40,8 @@ class Database:
                     due_date TEXT,
                     completed INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
-                    completed_at TEXT
+                    completed_at TEXT,
+                    recurrence TEXT
                 )
             """)
             # Migration: databases created before completion times were
@@ -52,6 +53,11 @@ class Database:
             if "completed_at" not in columns:
                 connection.execute(
                     "ALTER TABLE tasks ADD COLUMN completed_at TEXT"
+                )
+            # Migration: repeat rule for recurring tasks (NULL = no repeat).
+            if "recurrence" not in columns:
+                connection.execute(
+                    "ALTER TABLE tasks ADD COLUMN recurrence TEXT"
                 )
             # Migration: tags live in their own table, so existing
             # databases upgrade safely without altering the tasks table.
@@ -103,13 +109,14 @@ class Database:
             cursor = connection.execute("""
                 INSERT INTO tasks (
                     title, description, priority, category,
-                    due_date, completed, created_at, completed_at
+                    due_date, completed, created_at, completed_at,
+                    recurrence
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 task.title, task.description, task.priority,
                 task.category, task.due_date, int(task.completed),
-                task.created_at, task.completed_at
+                task.created_at, task.completed_at, task.recurrence
             ))
             task.task_id = cursor.lastrowid
             self._save_tags(connection, task.task_id, task.tags)
@@ -155,12 +162,12 @@ class Database:
                 UPDATE tasks
                 SET title = ?, description = ?, priority = ?,
                     category = ?, due_date = ?, completed = ?,
-                    completed_at = ?
+                    completed_at = ?, recurrence = ?
                 WHERE task_id = ?
             """, (
                 task.title, task.description, task.priority,
                 task.category, task.due_date, int(task.completed),
-                task.completed_at, task.task_id
+                task.completed_at, task.recurrence, task.task_id
             ))
 
             if cursor.rowcount > 0:
@@ -331,5 +338,6 @@ class Database:
             completed=bool(row["completed"]),
             created_at=row["created_at"],
             completed_at=row["completed_at"],
+            recurrence=row["recurrence"],
             tags=tags or []
         )
