@@ -2,6 +2,7 @@ import os
 import re
 import shutil
 import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -288,6 +289,27 @@ def prune_backups(backup_dir, keep: int) -> list:
     return removed
 
 
+def _replace_file(source, destination, attempts: int = 5, delay: float = 0.2):
+    """Move a file over another one, retrying briefly if it is in use.
+
+    On Windows a file cannot be replaced while any program has it open, and
+    antivirus software can hold a new file for a moment. After the last
+    attempt a clear error is raised and the destination is left untouched.
+    """
+    for attempt in range(attempts):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise ValueError(
+                    "Could not replace the database file because another "
+                    "program is using it. Close other tracker windows and "
+                    "try again. Your data was not changed."
+                )
+            time.sleep(delay)
+
+
 def restore_backup(
     backup_path,
     db_path,
@@ -346,7 +368,7 @@ def restore_backup(
         if staged_problems:
             raise ValueError("Copy failed verification: " + "; ".join(staged_problems))
 
-        os.replace(staging, live)
+        _replace_file(staging, live)
     finally:
         if staging.exists():
             staging.unlink()

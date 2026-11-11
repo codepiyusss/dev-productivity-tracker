@@ -154,3 +154,48 @@ def test_safety_copy_appears_in_the_backup_list(setup):
 
     labels = [b["label"] for b in list_backups(live.parent / "backups")]
     assert labels == ["pre-restore"]
+
+
+def test_file_in_use_gives_a_clear_error_and_changes_nothing(setup, monkeypatch):
+    live, backup, _ = setup
+    before = live.read_bytes()
+    attempts = []
+    real_replace = os.replace
+
+    def locked(source, destination):
+        if str(destination) != str(live):   # only the live database is locked
+            return real_replace(source, destination)
+        attempts.append(1)
+        raise PermissionError("in use")
+
+    monkeypatch.setattr("src.backup.os.replace", locked)
+    monkeypatch.setattr("src.backup.time.sleep", lambda seconds: None)
+
+    with pytest.raises(ValueError, match="another program is using it"):
+        restore_backup(backup, str(live), now=NOW)
+
+    assert len(attempts) == 5
+    assert live.read_bytes() == before
+    assert not any(name.endswith(".tmp") for name in os.listdir(live.parent))
+
+
+def test_a_briefly_locked_file_is_retried(setup, monkeypatch):
+    live, backup, _ = setup
+    real_replace = os.replace
+    calls = {"count": 0}
+
+    def flaky(source, destination):
+        if str(destination) != str(live):
+            return real_replace(source, destination)
+        calls["count"] += 1
+        if calls["count"] < 3:
+            raise PermissionError("busy")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr("src.backup.os.replace", flaky)
+    monkeypatch.setattr("src.backup.time.sleep", lambda seconds: None)
+
+    restore_backup(backup, str(live), now=NOW)
+
+    assert calls["count"] == 3
+    assert titles(live) == ["Original A", "Original B"]
