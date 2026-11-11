@@ -392,3 +392,14 @@ def format_size(size_bytes: int) -> str:
             text = f"{size:.1f}".rstrip("0").rstrip(".")
             return f"{text} {unit}"
         size /= 1024
+
+
+def format_backup_entry(entry: dict) -> str:
+    """One line per backup: date, size, contents and name."""
+    when = entry["created"].strftime("%Y-%m-%d %H:%M:%S")
+    contents = (
+        format_counts(entry["counts"]) if entry["counts"] is not None
+        else f"UNREADABLE ({entry['problem']})"
+    )
+
+    return f"{when}  {format_size(entry['size_bytes']):>8}  {contents}  [{entry['name']}]"

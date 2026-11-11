@@ -3,7 +3,10 @@ import json
 import sqlite3
 import sys
 
-from src.backup import create_backup, format_counts, format_size
+from src.backup import (
+    create_backup, default_backup_dir, format_backup_entry, format_counts,
+    format_size, list_backups
+)
 from src.database import Database
 from src.tasks import TaskManager
 from src.analytics import ProductivityAnalytics
@@ -234,6 +237,11 @@ def build_parser():
     backup_create.add_argument(
         "--dir", dest="backup_dir",
         help="Folder for the backup (default: 'backups' next to the database)"
+    )
+
+    backup_list = backup_commands.add_parser("list", help="Show saved backups")
+    backup_list.add_argument(
+        "--dir", dest="backup_dir", help="Folder to look in (default: next to the database)"
     )
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
@@ -596,6 +604,17 @@ def handle_backup(manager, args):
                 f"Contents: {format_counts(info['counts'])} "
                 f"({format_size(info['size_bytes'])})"
             )
+        elif args.backup_command == "list":
+            folder = args.backup_dir or default_backup_dir(db_path)
+            backups = list_backups(folder)
+
+            if not backups:
+                print(f"No backups found in {folder}")
+                return 0
+
+            print(f"Backups in {folder} (newest first):")
+            for entry in backups:
+                print(f"  {format_backup_entry(entry)}")
     except ValueError as error:
         print(f"Backup failed: {error}")
         return 1
