@@ -190,3 +190,35 @@ def verify_database(path) -> list:
         connection.close()
 
     return problems
+
+
+def default_backup_dir(db_path) -> Path:
+    """Backups live in a 'backups' folder next to the database file."""
+    return Path(db_path).parent / "backups"
+
+
+def create_backup(
+    db_path,
+    backup_dir=None,
+    now: Optional[datetime] = None,
+    label: Optional[str] = None
+) -> dict:
+    """Snapshot the database into the backup folder and verify the result.
+
+    If the new backup fails verification it is deleted and an error is
+    raised, so a backup file that exists is always one you can restore.
+    """
+    now = now or datetime.now()
+    folder = Path(backup_dir) if backup_dir else default_backup_dir(db_path)
+    destination = folder / backup_filename(now, label)
+
+    path = copy_database(db_path, destination)
+    problems = verify_database(path)
+
+    if problems:
+        Path(path).unlink()
+        raise ValueError("Backup failed verification: " + "; ".join(problems))
+
+    info = describe_database(path)
+
+    return {"path": path, "created": now, **info}
