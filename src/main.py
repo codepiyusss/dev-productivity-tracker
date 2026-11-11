@@ -240,6 +240,10 @@ def build_parser():
         "--dir", dest="backup_dir",
         help="Folder for the backup (default: 'backups' next to the database)"
     )
+    backup_create.add_argument(
+        "--keep", type=positive_int,
+        help="Afterwards, delete older backups so only this many remain"
+    )
 
     backup_list = backup_commands.add_parser("list", help="Show saved backups")
     backup_list.add_argument(
@@ -631,6 +635,13 @@ def handle_backup(manager, args):
                 f"Contents: {format_counts(info['counts'])} "
                 f"({format_size(info['size_bytes'])})"
             )
+
+            if args.keep:
+                folder = Path(info["path"]).parent
+                removed = prune_backups(folder, args.keep)
+                if removed:
+                    print(f"Removed {len(removed)} old backup(s); keeping the newest {args.keep}.")
+
         elif args.backup_command == "list":
             folder = args.backup_dir or default_backup_dir(db_path)
             backups = list_backups(folder)
