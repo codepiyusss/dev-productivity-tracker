@@ -156,3 +156,37 @@ def format_counts(counts: dict) -> str:
     ]
 
     return ", ".join(parts) if parts else "empty"
+
+
+def verify_database(path) -> list:
+    """Check a database file for problems. An empty list means it is healthy.
+
+    Runs SQLite's integrity check and a foreign key check, and confirms the
+    file really is a task database. The file is opened read-only.
+    """
+    problems = []
+
+    try:
+        describe_database(path)
+    except ValueError as error:
+        return [str(error)]
+
+    connection = _open_read_only(path)
+
+    try:
+        results = [row[0] for row in connection.execute("PRAGMA integrity_check")]
+
+        if results != ["ok"]:
+            problems.extend(f"Integrity check: {line}" for line in results[:5])
+
+        broken = connection.execute("PRAGMA foreign_key_check").fetchall()
+        if broken:
+            problems.append(
+                f"{len(broken)} row(s) point to records that no longer exist."
+            )
+    except sqlite3.DatabaseError as error:
+        problems.append(f"Database error: {error}")
+    finally:
+        connection.close()
+
+    return problems
