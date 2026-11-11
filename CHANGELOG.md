@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- Add database backup and restore: `backup create`, `list`, `verify`, `restore` and `prune`.
+- Backups are consistent snapshots made with SQLite's backup API and are verified (integrity and foreign key checks) before they are kept.
+- Restoring verifies the backup first, saves the current database as a `pre-restore` safety copy, and swaps the file in one step. Safety copies are never pruned.
+- Add `backup create --keep N` for automatic pruning and `import --backup` to save a copy before importing.
+- `import` now exits with code 1 when it fails.
+- Fix: database and journal connections are now closed as soon as each operation finishes. They used to stay open until garbage collection, which on Windows blocked replacing or deleting the database file.
+- Restore retries briefly and then reports a clear error if another program has the database file open.
 - Add recurring tasks: `add --repeat daily|weekly|monthly`, and `edit --repeat` / `--no-repeat`.
 - Completing a repeating task creates the next occurrence (same title, priority, category and tags) with the next due date.
 - Repeating tasks require a due date; the schedule never leaves a pile of overdue copies after late completion.

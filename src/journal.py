@@ -2,6 +2,8 @@
 from datetime import datetime, date
 from pathlib import Path
 
+from src.sqlite_utils import ClosingConnection
+
 
 class ProductivityJournal:
     def __init__(self, db_path="data/productivity.db"):
@@ -23,7 +25,8 @@ class ProductivityJournal:
     def _connect(self):
         connection = sqlite3.connect(
             self.db_path,
-            uri=self.db_path.startswith("file:")
+            uri=self.db_path.startswith("file:"),
+            factory=ClosingConnection
         )
         connection.row_factory = sqlite3.Row
         return connection

@@ -2,7 +2,13 @@
 import json
 import sqlite3
 import sys
+from pathlib import Path
 
+from src.backup import (
+    backups_to_prune, create_backup, default_backup_dir, format_backup_entry, format_counts,
+    describe_database, format_size, list_backups, prune_backups, restore_backup,
+    verify_database
+)
 from src.database import Database
 from src.tasks import TaskManager
 from src.analytics import ProductivityAnalytics
@@ -144,6 +150,10 @@ def build_parser():
         "--allow-duplicates", action="store_true",
         help="Import tasks even if a matching task already exists"
     )
+    import_parser.add_argument(
+        "--backup", action="store_true",
+        help="Save a database backup before importing (ignored with --dry-run)"
+    )
 
     # Tag commands
     tag = commands.add_parser("tag", help="Manage task tags")
@@ -223,6 +233,50 @@ def build_parser():
     timer_list.add_argument(
         "--days", type=positive_int, default=7,
         help="How many days back to show (default: 7)"
+    )
+
+    backup = commands.add_parser("backup", help="Back up and restore the database")
+    backup_commands = backup.add_subparsers(dest="backup_command", required=True)
+
+    backup_create = backup_commands.add_parser("create", help="Save a backup now")
+    backup_create.add_argument("--label", help="Short name added to the file name")
+    backup_create.add_argument(
+        "--dir", dest="backup_dir",
+        help="Folder for the backup (default: 'backups' next to the database)"
+    )
+    backup_create.add_argument(
+        "--keep", type=positive_int,
+        help="Afterwards, delete older backups so only this many remain"
+    )
+
+    backup_list = backup_commands.add_parser("list", help="Show saved backups")
+    backup_list.add_argument(
+        "--dir", dest="backup_dir", help="Folder to look in (default: next to the database)"
+    )
+
+    backup_verify = backup_commands.add_parser(
+        "verify", help="Check that a backup file is healthy"
+    )
+    backup_verify.add_argument("file", help="Path of the backup file")
+
+    backup_restore = backup_commands.add_parser(
+        "restore", help="Replace the current database with a backup"
+    )
+    backup_restore.add_argument("file", help="Path of the backup file")
+    backup_restore.add_argument(
+        "-y", "--yes", action="store_true", help="Restore without asking"
+    )
+
+    backup_prune = backup_commands.add_parser(
+        "prune", help="Delete old backups, keeping the newest ones"
+    )
+    backup_prune.add_argument(
+        "--keep", type=positive_int, default=5,
+        help="How many recent backups to keep (default: 5)"
+    )
+    backup_prune.add_argument("--dir", dest="backup_dir")
+    backup_prune.add_argument(
+        "-y", "--yes", action="store_true", help="Delete without asking"
     )
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
@@ -369,6 +423,14 @@ def handle_export(manager, args):
 
 
 def handle_import(manager, args):
+    if args.backup and not args.dry_run:
+        try:
+            info = create_backup(manager.database.db_path, label="before-import")
+        except ValueError as error:
+            print(f"Backup failed, so nothing was imported: {error}")
+            return 1
+        print(f"Backup saved before import: {info['path']}")
+
     try:
         result = import_tasks_csv(
             args.csv_file,
@@ -378,7 +440,7 @@ def handle_import(manager, args):
         )
     except (ValueError, OSError, UnicodeDecodeError) as error:
         print(f"Could not import tasks: {error}")
-        return
+        return 1
 
     prefix = "[Dry run] Would import" if args.dry_run else "Imported"
     print(f"{prefix} {result.imported} task(s).")
@@ -572,6 +634,106 @@ def format_time_entry(entry):
         f"{format_duration(entry['seconds'])} | "
         f"task {entry['task_id']}: {entry['title']}{suffix}"
     )
+
+
+def handle_backup(manager, args):
+    db_path = manager.database.db_path
+
+    try:
+        if args.backup_command == "create":
+            info = create_backup(db_path, args.backup_dir, label=args.label)
+            print(f"Backup created: {info['path']}")
+            print(
+                f"Contents: {format_counts(info['counts'])} "
+                f"({format_size(info['size_bytes'])})"
+            )
+
+            if args.keep:
+                folder = Path(info["path"]).parent
+                removed = prune_backups(folder, args.keep)
+                if removed:
+                    print(f"Removed {len(removed)} old backup(s); keeping the newest {args.keep}.")
+
+        elif args.backup_command == "list":
+            folder = args.backup_dir or default_backup_dir(db_path)
+            backups = list_backups(folder)
+
+            if not backups:
+                print(f"No backups found in {folder}")
+                return 0
+
+            print(f"Backups in {folder} (newest first):")
+            for entry in backups:
+                print(f"  {format_backup_entry(entry)}")
+        elif args.backup_command == "restore":
+            problems = verify_database(args.file)
+            if problems:
+                print(f"Cannot restore {args.file}:")
+                for problem in problems:
+                    print(f"  - {problem}")
+                return 1
+
+            incoming = describe_database(args.file)["counts"]
+            current = (
+                describe_database(db_path)["counts"]
+                if Path(db_path).is_file() else None
+            )
+
+            print(f"Backup:  {format_counts(incoming)}")
+            print(f"Current: {format_counts(current) if current else 'no database yet'}")
+            print("A safety copy of the current database is saved first.")
+
+            if not args.yes and not confirm(
+                "Replace the current database with this backup?"
+            ):
+                print("Cancelled. Nothing was changed.")
+                return 0
+
+            result = restore_backup(args.file, db_path)
+            print(f"Restored: {format_counts(result['counts'])}")
+            if result["safety_backup"]:
+                note = "" if result["safety_verified"] else " (current database was damaged; copied as-is)"
+                print(f"Previous data saved to: {result['safety_backup']}{note}")
+
+        elif args.backup_command == "prune":
+            folder = args.backup_dir or default_backup_dir(db_path)
+            doomed = backups_to_prune(folder, args.keep)
+
+            if not doomed:
+                print(f"Nothing to delete. {args.keep} or fewer backups in {folder}.")
+                return 0
+
+            print(f"Would delete {len(doomed)} old backup(s), keeping the newest {args.keep}:")
+            for entry in doomed:
+                print(f"  {entry['name']}")
+
+            if not args.yes and not confirm("Delete these backups?"):
+                print("Cancelled. Nothing was deleted.")
+                return 0
+
+            removed = prune_backups(folder, args.keep)
+            print(f"Deleted {len(removed)} backup(s). Safety copies are never deleted.")
+
+        elif args.backup_command == "verify":
+            problems = verify_database(args.file)
+
+            if problems:
+                print(f"Problems found in {args.file}:")
+                for problem in problems:
+                    print(f"  - {problem}")
+                return 1
+
+            info = describe_database(args.file)
+            print(f"OK: {args.file}")
+            print(
+                f"Contents: {format_counts(info['counts'])} "
+                f"({format_size(info['size_bytes'])})"
+            )
+    except ValueError as error:
+        print(f"Backup failed: {error}")
+        return 1
+
+    return 0
 
 
 def handle_timer(manager, args):
@@ -860,8 +1022,7 @@ def _run(argv=None):
         return
 
     if args.command == "import":
-        handle_import(manager, args)
-        return
+        return handle_import(manager, args)
 
     if args.command == "goal":
         handle_goal(manager, args)
@@ -876,6 +1037,9 @@ def _run(argv=None):
 
     if args.command == "timer":
         return handle_timer(manager, args)
+
+    if args.command == "backup":
+        return handle_backup(manager, args)
 
     if args.command == "show":
         return handle_show(manager, args)

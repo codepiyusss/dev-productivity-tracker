@@ -18,3 +18,10 @@ logging, listing and summaries. All methods that depend on the current time
 accept a `now` argument so they can be tested with fixed dates.
 `src/utils.py` provides `parse_duration` (`45`, `45m`, `1h30m`, `1:30`) and
 `format_duration`.
+
+## Backups
+
+`src/backup.py` contains `copy_database`, `verify_database`, `describe_database`,
+`create_backup`, `list_backups`, `prune_backups` and `restore_backup`. The CLI layer
+(`handle_backup` in `src/main.py`) only parses arguments, asks for confirmation and
+prints results.

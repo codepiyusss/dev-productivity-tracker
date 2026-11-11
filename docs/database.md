@@ -49,3 +49,23 @@ regular date and finishing very late does not create overdue copies. Monthly
 repeats clamp to the end of short months (Jan 31 becomes Feb 28), and the shorter
 day carries forward. Reopening a completed task does not delete an occurrence that
 was already created.
+
+## Backups
+
+`src/backup.py` works on database files, not on the live connection. Backups are
+written to a `backups` folder next to the database (override with `--dir`) and are
+named `productivity-YYYYMMDD-HHMMSS[-label].db`.
+
+- **Creating:** SQLite's backup API takes a consistent snapshot even while the
+  database is in use. The snapshot is built in a temporary file, verified with
+  `PRAGMA integrity_check` and `PRAGMA foreign_key_check`, and then moved into place.
+  A backup that fails verification is deleted, so a backup file that exists can be restored.
+- **Restoring:** the backup is verified first (a bad backup changes nothing), the
+  current database is saved as a `pre-restore` backup, and the backup is copied
+  beside the database, verified again, and swapped in with a single rename. Backups
+  made by older versions are upgraded automatically the next time the database is opened.
+- **Pruning:** keeps the newest N backups. Files that are not named like backups, and
+  `pre-restore` safety copies, are never deleted.
+
+Backups contain all of your data (tasks, time entries, goals and journal), so keep
+them somewhere private.

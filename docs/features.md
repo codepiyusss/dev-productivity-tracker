@@ -14,3 +14,4 @@
 - Input validation with clear CLI error messages
 - Time tracking with timers, manual entries and summaries
 - Recurring tasks (daily, weekly, monthly)
+- Database backup, verification, restore and pruning
