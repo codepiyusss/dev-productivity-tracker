@@ -94,3 +94,65 @@ def copy_database(source_path, dest_path) -> str:
         raise ValueError(f"Could not copy database: {error}")
 
     return str(dest)
+
+
+COUNTED_TABLES = {
+    "tasks": "tasks",
+    "time_entries": "time entries",
+    "goals": "goals",
+    "journal_entries": "journal entries",
+}
+
+
+def _open_read_only(path) -> sqlite3.Connection:
+    source = Path(path)
+
+    if not source.is_file():
+        raise ValueError(f"Database file not found: {source}")
+
+    return sqlite3.connect(f"file:{source.as_posix()}?mode=ro", uri=True)
+
+
+def describe_database(path) -> dict:
+    """What a database file contains, without changing it.
+
+    Returns {"size_bytes": int, "counts": {table: rows}}. Tables that do not
+    exist yet (for example, time entries in an older database) count as 0.
+    Raises ValueError if the file is not a task database.
+    """
+    connection = _open_read_only(path)
+
+    try:
+        tables = {
+            row[0] for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+
+        if "tasks" not in tables:
+            raise ValueError("This file does not look like a tracker database.")
+
+        counts = {
+            table: (
+                connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                if table in tables else 0
+            )
+            for table in COUNTED_TABLES
+        }
+    except sqlite3.DatabaseError as error:
+        raise ValueError(f"Not a readable database: {error}")
+    finally:
+        connection.close()
+
+    return {"size_bytes": Path(path).stat().st_size, "counts": counts}
+
+
+def format_counts(counts: dict) -> str:
+    """'12 tasks, 3 time entries, 1 goals, 5 journal entries' (zeros omitted)."""
+    parts = [
+        f"{counts[table]} {label}"
+        for table, label in COUNTED_TABLES.items()
+        if counts.get(table)
+    ]
+
+    return ", ".join(parts) if parts else "empty"
