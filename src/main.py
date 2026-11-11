@@ -150,6 +150,10 @@ def build_parser():
         "--allow-duplicates", action="store_true",
         help="Import tasks even if a matching task already exists"
     )
+    import_parser.add_argument(
+        "--backup", action="store_true",
+        help="Save a database backup before importing (ignored with --dry-run)"
+    )
 
     # Tag commands
     tag = commands.add_parser("tag", help="Manage task tags")
@@ -419,6 +423,14 @@ def handle_export(manager, args):
 
 
 def handle_import(manager, args):
+    if args.backup and not args.dry_run:
+        try:
+            info = create_backup(manager.database.db_path, label="before-import")
+        except ValueError as error:
+            print(f"Backup failed, so nothing was imported: {error}")
+            return 1
+        print(f"Backup saved before import: {info['path']}")
+
     try:
         result = import_tasks_csv(
             args.csv_file,
@@ -428,7 +440,7 @@ def handle_import(manager, args):
         )
     except (ValueError, OSError, UnicodeDecodeError) as error:
         print(f"Could not import tasks: {error}")
-        return
+        return 1
 
     prefix = "[Dry run] Would import" if args.dry_run else "Imported"
     print(f"{prefix} {result.imported} task(s).")
@@ -1010,8 +1022,7 @@ def _run(argv=None):
         return
 
     if args.command == "import":
-        handle_import(manager, args)
-        return
+        return handle_import(manager, args)
 
     if args.command == "goal":
         handle_goal(manager, args)
