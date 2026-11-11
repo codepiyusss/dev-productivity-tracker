@@ -379,3 +379,16 @@ def restore_backup(
         "safety_verified": safety_verified,
         **describe_database(live),
     }
+
+
+def format_size(size_bytes: int) -> str:
+    """Human-readable file size: 512 B, 24 KB, 1.5 MB."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+
+    size = size_bytes / 1024
+    for unit in ("KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            text = f"{size:.1f}".rstrip("0").rstrip(".")
+            return f"{text} {unit}"
+        size /= 1024

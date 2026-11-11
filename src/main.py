@@ -3,6 +3,7 @@ import json
 import sqlite3
 import sys
 
+from src.backup import create_backup, format_counts, format_size
 from src.database import Database
 from src.tasks import TaskManager
 from src.analytics import ProductivityAnalytics
@@ -223,6 +224,16 @@ def build_parser():
     timer_list.add_argument(
         "--days", type=positive_int, default=7,
         help="How many days back to show (default: 7)"
+    )
+
+    backup = commands.add_parser("backup", help="Back up and restore the database")
+    backup_commands = backup.add_subparsers(dest="backup_command", required=True)
+
+    backup_create = backup_commands.add_parser("create", help="Save a backup now")
+    backup_create.add_argument("--label", help="Short name added to the file name")
+    backup_create.add_argument(
+        "--dir", dest="backup_dir",
+        help="Folder for the backup (default: 'backups' next to the database)"
     )
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
@@ -574,6 +585,24 @@ def format_time_entry(entry):
     )
 
 
+def handle_backup(manager, args):
+    db_path = manager.database.db_path
+
+    try:
+        if args.backup_command == "create":
+            info = create_backup(db_path, args.backup_dir, label=args.label)
+            print(f"Backup created: {info['path']}")
+            print(
+                f"Contents: {format_counts(info['counts'])} "
+                f"({format_size(info['size_bytes'])})"
+            )
+    except ValueError as error:
+        print(f"Backup failed: {error}")
+        return 1
+
+    return 0
+
+
 def handle_timer(manager, args):
     tracker = TimeTracker(manager.database)
 
@@ -876,6 +905,9 @@ def _run(argv=None):
 
     if args.command == "timer":
         return handle_timer(manager, args)
+
+    if args.command == "backup":
+        return handle_backup(manager, args)
 
     if args.command == "show":
         return handle_show(manager, args)
