@@ -5,7 +5,7 @@ import sys
 
 from src.backup import (
     create_backup, default_backup_dir, format_backup_entry, format_counts,
-    format_size, list_backups
+    describe_database, format_size, list_backups, verify_database
 )
 from src.database import Database
 from src.tasks import TaskManager
@@ -243,6 +243,11 @@ def build_parser():
     backup_list.add_argument(
         "--dir", dest="backup_dir", help="Folder to look in (default: next to the database)"
     )
+
+    backup_verify = backup_commands.add_parser(
+        "verify", help="Check that a backup file is healthy"
+    )
+    backup_verify.add_argument("file", help="Path of the backup file")
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
     stats.add_argument(
@@ -615,6 +620,21 @@ def handle_backup(manager, args):
             print(f"Backups in {folder} (newest first):")
             for entry in backups:
                 print(f"  {format_backup_entry(entry)}")
+        elif args.backup_command == "verify":
+            problems = verify_database(args.file)
+
+            if problems:
+                print(f"Problems found in {args.file}:")
+                for problem in problems:
+                    print(f"  - {problem}")
+                return 1
+
+            info = describe_database(args.file)
+            print(f"OK: {args.file}")
+            print(
+                f"Contents: {format_counts(info['counts'])} "
+                f"({format_size(info['size_bytes'])})"
+            )
     except ValueError as error:
         print(f"Backup failed: {error}")
         return 1
