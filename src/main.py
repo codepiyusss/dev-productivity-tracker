@@ -5,8 +5,9 @@ import sys
 from pathlib import Path
 
 from src.backup import (
-    create_backup, default_backup_dir, format_backup_entry, format_counts,
-    describe_database, format_size, list_backups, restore_backup, verify_database
+    backups_to_prune, create_backup, default_backup_dir, format_backup_entry, format_counts,
+    describe_database, format_size, list_backups, prune_backups, restore_backup,
+    verify_database
 )
 from src.database import Database
 from src.tasks import TaskManager
@@ -256,6 +257,18 @@ def build_parser():
     backup_restore.add_argument("file", help="Path of the backup file")
     backup_restore.add_argument(
         "-y", "--yes", action="store_true", help="Restore without asking"
+    )
+
+    backup_prune = backup_commands.add_parser(
+        "prune", help="Delete old backups, keeping the newest ones"
+    )
+    backup_prune.add_argument(
+        "--keep", type=positive_int, default=5,
+        help="How many recent backups to keep (default: 5)"
+    )
+    backup_prune.add_argument("--dir", dest="backup_dir")
+    backup_prune.add_argument(
+        "-y", "--yes", action="store_true", help="Delete without asking"
     )
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
@@ -658,6 +671,25 @@ def handle_backup(manager, args):
             if result["safety_backup"]:
                 note = "" if result["safety_verified"] else " (current database was damaged; copied as-is)"
                 print(f"Previous data saved to: {result['safety_backup']}{note}")
+
+        elif args.backup_command == "prune":
+            folder = args.backup_dir or default_backup_dir(db_path)
+            doomed = backups_to_prune(folder, args.keep)
+
+            if not doomed:
+                print(f"Nothing to delete. {args.keep} or fewer backups in {folder}.")
+                return 0
+
+            print(f"Would delete {len(doomed)} old backup(s), keeping the newest {args.keep}:")
+            for entry in doomed:
+                print(f"  {entry['name']}")
+
+            if not args.yes and not confirm("Delete these backups?"):
+                print("Cancelled. Nothing was deleted.")
+                return 0
+
+            removed = prune_backups(folder, args.keep)
+            print(f"Deleted {len(removed)} backup(s). Safety copies are never deleted.")
 
         elif args.backup_command == "verify":
             problems = verify_database(args.file)

@@ -266,13 +266,8 @@ def list_backups(backup_dir) -> list:
 PROTECTED_LABELS = ("pre-restore",)
 
 
-def prune_backups(backup_dir, keep: int) -> list:
-    """Delete the oldest backups, keeping the newest `keep`.
-
-    Safety copies made before a restore (label 'pre-restore') are never
-    deleted and do not count toward `keep`. Files that are not backups are
-    never touched. Returns the names that were removed.
-    """
+def backups_to_prune(backup_dir, keep: int) -> list:
+    """The backups `prune_backups` would delete (nothing is changed)."""
     if isinstance(keep, bool) or not isinstance(keep, int) or keep < 1:
         raise ValueError("Keep must be a whole number of at least 1.")
 
@@ -280,9 +275,20 @@ def prune_backups(backup_dir, keep: int) -> list:
         entry for entry in list_backups(backup_dir)
         if entry["label"] not in PROTECTED_LABELS
     ]
+
+    return candidates[keep:]
+
+
+def prune_backups(backup_dir, keep: int) -> list:
+    """Delete the oldest backups, keeping the newest `keep`.
+
+    Safety copies made before a restore (label 'pre-restore') are never
+    deleted and do not count toward `keep`. Files that are not backups are
+    never touched. Returns the names that were removed.
+    """
     removed = []
 
-    for entry in candidates[keep:]:
+    for entry in backups_to_prune(backup_dir, keep):
         Path(entry["path"]).unlink()
         removed.append(entry["name"])
 
