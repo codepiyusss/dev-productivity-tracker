@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -285,3 +286,74 @@ def prune_backups(backup_dir, keep: int) -> list:
         removed.append(entry["name"])
 
     return removed
+
+
+def restore_backup(
+    backup_path,
+    db_path,
+    now: Optional[datetime] = None,
+    safety_dir=None
+) -> dict:
+    """Replace the live database with a backup, safely.
+
+    Order of operations, so a failure at any point leaves the current
+    database usable:
+      1. The backup is verified. If it has problems nothing is touched.
+      2. The current database (if any) is saved as a 'pre-restore' backup.
+      3. The backup is copied beside the database, verified again, and then
+         moved into place in one step.
+
+    Opening the restored file with `Database` upgrades older backups to the
+    current schema automatically.
+    """
+    backup = Path(backup_path)
+    live = Path(db_path)
+    now = now or datetime.now()
+
+    problems = verify_database(backup)
+    if problems:
+        raise ValueError("Backup cannot be restored: " + "; ".join(problems))
+
+    if live.exists() and live.resolve() == backup.resolve():
+        raise ValueError("The backup and the live database are the same file.")
+
+    safety_backup = None
+    safety_verified = None
+
+    if live.is_file():
+        folder = Path(safety_dir) if safety_dir else default_backup_dir(live)
+
+        try:
+            safety_backup = create_backup(live, folder, now, "pre-restore")["path"]
+            safety_verified = True
+        except ValueError as error:
+            if "already exists" in str(error):
+                raise
+            # The current database is damaged. Keep its raw bytes anyway,
+            # because it may still be useful, then carry on with the restore.
+            folder.mkdir(parents=True, exist_ok=True)
+            safety_backup = str(folder / backup_filename(now, "pre-restore"))
+            shutil.copyfile(live, safety_backup)
+            safety_verified = False
+
+    live.parent.mkdir(parents=True, exist_ok=True)
+    staging = live.with_name(live.name + ".restore.tmp")
+
+    try:
+        shutil.copyfile(backup, staging)
+
+        staged_problems = verify_database(staging)
+        if staged_problems:
+            raise ValueError("Copy failed verification: " + "; ".join(staged_problems))
+
+        os.replace(staging, live)
+    finally:
+        if staging.exists():
+            staging.unlink()
+
+    return {
+        "restored_from": str(backup),
+        "safety_backup": safety_backup,
+        "safety_verified": safety_verified,
+        **describe_database(live),
+    }

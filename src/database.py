@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 from src.models.task import Task
+from src.sqlite_utils import ClosingConnection
 
 
 class Database:
@@ -23,7 +24,9 @@ class Database:
         self.initialize()
 
     def _connect(self):
-        connection = sqlite3.connect(self.db_path, uri=self._uri)
+        connection = sqlite3.connect(
+            self.db_path, uri=self._uri, factory=ClosingConnection
+        )
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
