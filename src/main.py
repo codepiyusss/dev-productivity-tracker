@@ -2,10 +2,11 @@
 import json
 import sqlite3
 import sys
+from pathlib import Path
 
 from src.backup import (
     create_backup, default_backup_dir, format_backup_entry, format_counts,
-    describe_database, format_size, list_backups, verify_database
+    describe_database, format_size, list_backups, restore_backup, verify_database
 )
 from src.database import Database
 from src.tasks import TaskManager
@@ -248,6 +249,14 @@ def build_parser():
         "verify", help="Check that a backup file is healthy"
     )
     backup_verify.add_argument("file", help="Path of the backup file")
+
+    backup_restore = backup_commands.add_parser(
+        "restore", help="Replace the current database with a backup"
+    )
+    backup_restore.add_argument("file", help="Path of the backup file")
+    backup_restore.add_argument(
+        "-y", "--yes", action="store_true", help="Restore without asking"
+    )
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
     stats.add_argument(
@@ -620,6 +629,36 @@ def handle_backup(manager, args):
             print(f"Backups in {folder} (newest first):")
             for entry in backups:
                 print(f"  {format_backup_entry(entry)}")
+        elif args.backup_command == "restore":
+            problems = verify_database(args.file)
+            if problems:
+                print(f"Cannot restore {args.file}:")
+                for problem in problems:
+                    print(f"  - {problem}")
+                return 1
+
+            incoming = describe_database(args.file)["counts"]
+            current = (
+                describe_database(db_path)["counts"]
+                if Path(db_path).is_file() else None
+            )
+
+            print(f"Backup:  {format_counts(incoming)}")
+            print(f"Current: {format_counts(current) if current else 'no database yet'}")
+            print("A safety copy of the current database is saved first.")
+
+            if not args.yes and not confirm(
+                "Replace the current database with this backup?"
+            ):
+                print("Cancelled. Nothing was changed.")
+                return 0
+
+            result = restore_backup(args.file, db_path)
+            print(f"Restored: {format_counts(result['counts'])}")
+            if result["safety_backup"]:
+                note = "" if result["safety_verified"] else " (current database was damaged; copied as-is)"
+                print(f"Previous data saved to: {result['safety_backup']}{note}")
+
         elif args.backup_command == "verify":
             problems = verify_database(args.file)
 
