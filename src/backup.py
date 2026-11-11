@@ -222,3 +222,40 @@ def create_backup(
     info = describe_database(path)
 
     return {"path": path, "created": now, **info}
+
+
+def list_backups(backup_dir) -> list:
+    """Backups in a folder, newest first.
+
+    Only files named by `backup_filename` are listed; anything else in the
+    folder is ignored. A backup that cannot be read is still listed, with
+    `counts` set to None and the reason in `problem`.
+    """
+    folder = Path(backup_dir)
+
+    if not folder.is_dir():
+        return []
+
+    backups = []
+
+    for item in folder.iterdir():
+        parsed = parse_backup_name(item.name)
+
+        if parsed is None or not item.is_file():
+            continue
+
+        created, label = parsed
+        entry = {
+            "path": str(item), "name": item.name, "created": created,
+            "label": label, "size_bytes": item.stat().st_size,
+            "counts": None, "problem": None,
+        }
+
+        try:
+            entry["counts"] = describe_database(item)["counts"]
+        except ValueError as error:
+            entry["problem"] = str(error)
+
+        backups.append(entry)
+
+    return sorted(backups, key=lambda entry: (entry["created"], entry["name"]), reverse=True)
