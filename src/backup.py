@@ -1,5 +1,8 @@
+import os
 import re
+import sqlite3
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 PREFIX = "productivity-"
@@ -50,3 +53,44 @@ def parse_backup_name(name: str):
         return None
 
     return created, match.group(2)
+
+
+def copy_database(source_path, dest_path) -> str:
+    """Write a consistent snapshot of a SQLite database to a new file.
+
+    Uses SQLite's own backup API, so the copy is valid even if the source
+    is being written to. The snapshot is built in a temporary file and moved
+    into place, so an interrupted copy never leaves a half-written backup.
+    Refuses to overwrite an existing file.
+    """
+    source = Path(source_path)
+    dest = Path(dest_path)
+
+    if not source.is_file():
+        raise ValueError(f"Database file not found: {source}")
+
+    if dest.exists():
+        raise ValueError(f"File already exists: {dest}")
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    temp = dest.with_name(dest.name + ".tmp")
+
+    if temp.exists():
+        temp.unlink()
+
+    try:
+        origin = sqlite3.connect(f"file:{source.as_posix()}?mode=ro", uri=True)
+        target = sqlite3.connect(str(temp))
+        try:
+            origin.backup(target)
+        finally:
+            target.close()
+            origin.close()
+
+        os.replace(temp, dest)
+    except sqlite3.Error as error:
+        if temp.exists():
+            temp.unlink()
+        raise ValueError(f"Could not copy database: {error}")
+
+    return str(dest)
