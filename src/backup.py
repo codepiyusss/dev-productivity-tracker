@@ -103,6 +103,7 @@ COUNTED_TABLES = {
     "time_entries": "time entries",
     "goals": "goals",
     "journal_entries": "journal entries",
+    "task_dependencies": "dependencies",
 }
 
 
