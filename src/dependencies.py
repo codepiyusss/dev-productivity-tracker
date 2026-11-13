@@ -170,3 +170,16 @@ class DependencyManager:
             task for task in self.database.get_all_tasks(completed=False)
             if task.task_id not in blocked
         ]
+
+    def get_newly_ready(self, completed_task_id: int) -> List[Task]:
+        """Tasks freed up now that `completed_task_id` is done.
+
+        Call this after completing a task. A waiting task only counts if
+        that task was the last unfinished thing holding it up.
+        """
+        still_blocked = self.get_blocker_map()
+
+        return [
+            task for task in self.get_dependents(completed_task_id)
+            if task.task_id not in still_blocked
+        ]
