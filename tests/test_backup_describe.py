@@ -4,6 +4,7 @@ import pytest
 
 from src.backup import describe_database, format_counts
 from src.database import Database
+from src.dependencies import DependencyManager
 from src.goals import GoalTracker
 from src.journal import ProductivityJournal
 from src.tasks import TaskManager
@@ -17,6 +18,8 @@ def build(path):
     manager.create_task("B")
     TimeTracker(database).log_manual(1, 600)
     GoalTracker(database).set_goal("daily", 3)
+    manager.create_task("C")
+    DependencyManager(database).add(2, 1)
     ProductivityJournal(path).add_entry(
         achievements="Did things", entry_date="2026-11-10"
     )
@@ -29,7 +32,8 @@ def test_describe_counts_every_table(tmp_path):
     info = describe_database(path)
 
     assert info["counts"] == {
-        "tasks": 2, "time_entries": 1, "goals": 1, "journal_entries": 1,
+        "tasks": 3, "time_entries": 1, "goals": 1, "journal_entries": 1,
+        "task_dependencies": 1,
     }
     assert info["size_bytes"] > 0
 
@@ -44,6 +48,7 @@ def test_missing_tables_count_as_zero(tmp_path):
 
     assert describe_database(path)["counts"] == {
         "tasks": 1, "time_entries": 0, "goals": 0, "journal_entries": 0,
+        "task_dependencies": 0,
     }
 
 
@@ -82,8 +87,9 @@ def test_describe_rejects_other_sqlite_databases(tmp_path):
 
 def test_format_counts():
     assert format_counts(
-        {"tasks": 12, "time_entries": 3, "goals": 0, "journal_entries": 5}
-    ) == "12 tasks, 3 time entries, 5 journal entries"
+        {"tasks": 12, "time_entries": 3, "goals": 0, "journal_entries": 5,
+         "task_dependencies": 2}
+    ) == "12 tasks, 3 time entries, 5 journal entries, 2 dependencies"
     assert format_counts(
         {"tasks": 0, "time_entries": 0, "goals": 0, "journal_entries": 0}
     ) == "empty"

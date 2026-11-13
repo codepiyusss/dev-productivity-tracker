@@ -1,4 +1,5 @@
 ﻿from src.analytics import ProductivityAnalytics
+from src.dependencies import DependencyManager
 from src.goals import GoalTracker, format_progress
 from src.streaks import StreakTracker, format_streak_summary
 from src.timetracking import TimeTracker, format_time_summary
@@ -8,6 +9,7 @@ class ProductivityReports:
     def __init__(self, database):
         self.analytics = ProductivityAnalytics(database)
         self.goals = GoalTracker(database)
+        self.dependencies = DependencyManager(database)
         self.streaks = StreakTracker(database)
         self.time_tracker = TimeTracker(database)
 
@@ -75,6 +77,16 @@ class ProductivityReports:
             lines.extend(["", "DUE IN NEXT 7 DAYS", "-" * 35])
             for task in due_soon:
                 lines.append(f"[{task.task_id}] {task.title} (due {task.due_date})")
+
+        blocker_map = self.dependencies.get_blocker_map()
+        if blocker_map:
+            tasks = {t.task_id: t for t in self.dependencies.get_blocked_tasks()}
+            lines.extend(["", "BLOCKED TASKS", "-" * 35])
+            for task_id, blocker_ids in blocker_map.items():
+                waiting_on = ", ".join(f"#{number}" for number in blocker_ids)
+                lines.append(
+                    f"[{task_id}] {tasks[task_id].title} (waiting on {waiting_on})"
+                )
 
         goal_progress = self.goals.get_all_progress()
         if goal_progress:

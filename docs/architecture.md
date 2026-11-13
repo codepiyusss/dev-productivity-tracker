@@ -25,3 +25,10 @@ accept a `now` argument so they can be tested with fixed dates.
 `create_backup`, `list_backups`, `prune_backups` and `restore_backup`. The CLI layer
 (`handle_backup` in `src/main.py`) only parses arguments, asks for confirmation and
 prints results.
+
+## Dependencies
+
+`src/dependencies.py` contains the pure graph helpers (`find_path`, `find_cycle_if_added`)
+and `DependencyManager`, which validates new links and answers questions such as which tasks
+are blocked, ready, or freed by completing a task. The CLI (`handle_depend` and the `list`,
+`show` and `complete` commands in `src/main.py`) only formats and prints the results.

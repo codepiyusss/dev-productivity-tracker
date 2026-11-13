@@ -10,6 +10,7 @@ from src.backup import (
     verify_database
 )
 from src.database import Database
+from src.dependencies import DependencyManager
 from src.tasks import TaskManager
 from src.analytics import ProductivityAnalytics
 from src.recurrence import RULES
@@ -120,6 +121,15 @@ def build_parser():
         "--tag",
         action="append",
         help="Only show tasks with this tag (repeat to require several)"
+    )
+    readiness = list_parser.add_mutually_exclusive_group()
+    readiness.add_argument(
+        "--ready", action="store_true",
+        help="Only pending tasks with nothing unfinished blocking them"
+    )
+    readiness.add_argument(
+        "--blocked", action="store_true",
+        help="Only pending tasks waiting on unfinished tasks"
     )
     list_parser.add_argument(
         "--sort",
@@ -279,6 +289,30 @@ def build_parser():
         "-y", "--yes", action="store_true", help="Delete without asking"
     )
 
+    depend = commands.add_parser(
+        "depend", help="Make a task wait for other tasks"
+    )
+    depend_commands = depend.add_subparsers(dest="depend_command", required=True)
+
+    depend_add = depend_commands.add_parser(
+        "add", help="Task TASK_ID cannot be finished before BLOCKER_ID"
+    )
+    depend_add.add_argument("task_id", type=positive_int, help="The task that waits")
+    depend_add.add_argument(
+        "blocker_id", type=positive_int, help="The task that must be done first"
+    )
+
+    depend_remove = depend_commands.add_parser(
+        "remove", help="Stop TASK_ID waiting for BLOCKER_ID"
+    )
+    depend_remove.add_argument("task_id", type=positive_int)
+    depend_remove.add_argument("blocker_id", type=positive_int)
+
+    depend_list = depend_commands.add_parser(
+        "list", help="Show what a task waits for and what waits for it"
+    )
+    depend_list.add_argument("task_id", type=positive_int)
+
     stats = commands.add_parser("stats", help="Show productivity statistics")
     stats.add_argument(
         "--detailed", action="store_true",
@@ -291,6 +325,10 @@ def build_parser():
 
     complete = commands.add_parser("complete", help="Complete a task")
     complete.add_argument("task_id", type=positive_int)
+    complete.add_argument(
+        "--force", action="store_true",
+        help="Complete the task even if it is waiting on unfinished tasks"
+    )
 
     show = commands.add_parser("show", help="Show all details of one task")
     show.add_argument("task_id", type=positive_int)
@@ -378,7 +416,7 @@ def is_overdue(due_date, today=None):
         return False
 
 
-def format_task_line(task, today=None):
+def format_task_line(task, today=None, blocked_by=None):
     status = "Done" if task.completed else "Pending"
     line = (
         f"[{task.task_id}] {task.title} | "
@@ -393,6 +431,9 @@ def format_task_line(task, today=None):
 
     if task.recurrence:
         line += f" | repeats {task.recurrence}"
+
+    if blocked_by and not task.completed:
+        line += " | BLOCKED by " + ",".join(str(number) for number in blocked_by)
 
     if task.tags:
         line += " | " + " ".join(f"#{tag}" for tag in task.tags)
@@ -536,7 +577,9 @@ def handle_edit(manager, args):
     return 0
 
 
-def format_task_details(task, tracked_seconds=0, timer_running=False):
+def format_task_details(
+    task, tracked_seconds=0, timer_running=False, waits_for=None, needed_by=None
+):
     """Multi-line view of a single task."""
     if task.completed:
         status = f"Completed ({task.completed_at})" if task.completed_at else "Completed"
@@ -555,6 +598,15 @@ def format_task_details(task, tracked_seconds=0, timer_running=False):
         f"  Description: {task.description or 'none'}",
     ]
 
+    def short_list(others):
+        return ", ".join(f"[{other.task_id}] {other.title}" for other in others)
+
+    if waits_for:
+        lines.insert(len(lines) - 1, f"  Waits for:   {short_list(waits_for)}")
+
+    if needed_by:
+        lines.insert(len(lines) - 1, f"  Needed by:   {short_list(needed_by)}")
+
     if tracked_seconds or timer_running:
         tracked = format_duration(tracked_seconds)
         lines.insert(len(lines) - 1, f"  Time spent:  {tracked}" + (" (timer running)" if timer_running else ""))
@@ -570,11 +622,14 @@ def handle_show(manager, args):
         return 1
 
     tracker = TimeTracker(manager.database)
+    dependencies = DependencyManager(manager.database)
     running = manager.database.get_running_entry()
     print(format_task_details(
         task,
         tracked_seconds=tracker.total_seconds(task.task_id),
         timer_running=bool(running and running["task_id"] == task.task_id),
+        waits_for=dependencies.get_blockers(task.task_id),
+        needed_by=dependencies.get_dependents(task.task_id),
     ))
     return 0
 
@@ -634,6 +689,67 @@ def format_time_entry(entry):
         f"{format_duration(entry['seconds'])} | "
         f"task {entry['task_id']}: {entry['title']}{suffix}"
     )
+
+
+def format_dependencies(task, blockers, dependents):
+    """Text showing both directions of a task's dependencies."""
+    def line(other):
+        status = "done" if other.completed else "pending"
+        return f"  [{other.task_id}] {other.title} ({status})"
+
+    lines = [f"Task {task.task_id}: {task.title}"]
+
+    if not blockers and not dependents:
+        lines.append("  No dependencies.")
+        return "\n".join(lines)
+
+    if blockers:
+        lines.append("Waits for:")
+        lines.extend(line(other) for other in blockers)
+
+    if dependents:
+        lines.append("Is needed by:")
+        lines.extend(line(other) for other in dependents)
+
+    return "\n".join(lines)
+
+
+def handle_depend(manager, args):
+    dependencies = DependencyManager(manager.database)
+
+    try:
+        if args.depend_command == "add":
+            dependencies.add(args.task_id, args.blocker_id)
+            task = manager.get_task(args.task_id)
+            blocker = manager.get_task(args.blocker_id)
+            print(
+                f"Task {task.task_id} ({task.title}) now waits for "
+                f"task {blocker.task_id} ({blocker.title})."
+            )
+
+        elif args.depend_command == "list":
+            task = manager.get_task(args.task_id)
+
+            if task is None:
+                print("Task not found.")
+                return 1
+
+            print(format_dependencies(
+                task,
+                dependencies.get_blockers(task.task_id, pending_only=False),
+                dependencies.get_dependents(task.task_id, pending_only=False),
+            ))
+
+        elif args.depend_command == "remove":
+            dependencies.remove(args.task_id, args.blocker_id)
+            print(
+                f"Task {args.task_id} no longer waits for task {args.blocker_id}."
+            )
+    except ValueError as error:
+        print(error)
+        return 1
+
+    return 0
 
 
 def handle_backup(manager, args):
@@ -1041,6 +1157,9 @@ def _run(argv=None):
     if args.command == "backup":
         return handle_backup(manager, args)
 
+    if args.command == "depend":
+        return handle_depend(manager, args)
+
     if args.command == "show":
         return handle_show(manager, args)
 
@@ -1082,14 +1201,39 @@ def _run(argv=None):
             print(error)
             return
 
+        if args.ready or args.blocked:
+            blocked_ids = set(DependencyManager(manager.database).get_blocker_map())
+            tasks = [
+                task for task in tasks
+                if not task.completed
+                and ((task.task_id in blocked_ids) == bool(args.blocked))
+            ]
+
         if not tasks:
             print("No matching tasks found.")
             return
 
+        blocker_map = DependencyManager(manager.database).get_blocker_map()
+
         for task in tasks:
-            print(format_task_line(task))
+            print(format_task_line(
+                task, blocked_by=blocker_map.get(task.task_id)
+            ))
 
     elif args.command == "complete":
+        blockers = DependencyManager(manager.database).get_blockers(args.task_id)
+        task_to_complete = manager.get_task(args.task_id)
+
+        if (
+            blockers and not args.force
+            and task_to_complete is not None and not task_to_complete.completed
+        ):
+            print(f"Task {args.task_id} is waiting on unfinished tasks:")
+            for blocker in blockers:
+                print(f"  [{blocker.task_id}] {blocker.title}")
+            print("Finish those first, or use --force to complete it anyway.")
+            return 1
+
         stopped = None
         running = manager.database.get_running_entry()
         if running and running["task_id"] == args.task_id:
@@ -1106,6 +1250,11 @@ def _run(argv=None):
                 )
             if stopped:
                 print(f"Timer stopped automatically ({format_duration(stopped['seconds'])}).")
+            freed = DependencyManager(manager.database).get_newly_ready(args.task_id)
+            if freed:
+                print("Now ready to start:")
+                for freed_task in freed:
+                    print(f"  [{freed_task.task_id}] {freed_task.title}")
             for item in GoalTracker(manager.database).get_all_progress():
                 print(format_progress(item))
             print(describe_streak(manager))

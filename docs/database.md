@@ -69,3 +69,13 @@ named `productivity-YYYYMMDD-HHMMSS[-label].db`.
 
 Backups contain all of your data (tasks, time entries, goals and journal), so keep
 them somewhere private.
+
+## Task dependencies
+
+`task_dependencies` holds one row per link (`task_id` waits for `depends_on`) with a
+composite primary key, a check that a task cannot depend on itself, and `ON DELETE
+CASCADE` on both columns, so deleting a task removes every link that mentions it. The
+table is created with `CREATE TABLE IF NOT EXISTS`, so existing databases upgrade
+without data loss. Only unfinished blockers hold a task up: once a blocker is completed
+the task counts as ready. Circular chains (A waits for B, B waits for A, or longer loops)
+are rejected when a link is added.
