@@ -122,6 +122,15 @@ def build_parser():
         action="append",
         help="Only show tasks with this tag (repeat to require several)"
     )
+    readiness = list_parser.add_mutually_exclusive_group()
+    readiness.add_argument(
+        "--ready", action="store_true",
+        help="Only pending tasks with nothing unfinished blocking them"
+    )
+    readiness.add_argument(
+        "--blocked", action="store_true",
+        help="Only pending tasks waiting on unfinished tasks"
+    )
     list_parser.add_argument(
         "--sort",
         choices=["title", "priority", "category", "created_at", "due_date"],
@@ -1170,6 +1179,14 @@ def _run(argv=None):
         except ValueError as error:
             print(error)
             return
+
+        if args.ready or args.blocked:
+            blocked_ids = set(DependencyManager(manager.database).get_blocker_map())
+            tasks = [
+                task for task in tasks
+                if not task.completed
+                and ((task.task_id in blocked_ids) == bool(args.blocked))
+            ]
 
         if not tasks:
             print("No matching tasks found.")
