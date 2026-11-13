@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- Add task dependencies: `depend add TASK BLOCKER`, `depend remove` and `depend list`. A task can wait for one or more others; circular chains are rejected.
+- `list --ready` shows pending tasks nothing is blocking, and `list --blocked` shows tasks waiting on unfinished tasks. Blocked tasks are marked `BLOCKED by ...` in listings.
+- `complete` refuses to finish a blocked task unless `--force` is given, and announces tasks that were freed up.
+- `show` lists what a task waits for and what needs it; the detailed report and insights mention blocked tasks.
+- Add a `task_dependencies` table (created automatically on existing databases); backups count and restore dependencies.
 - Add database backup and restore: `backup create`, `list`, `verify`, `restore` and `prune`.
 - Backups are consistent snapshots made with SQLite's backup API and are verified (integrity and foreign key checks) before they are kept.
 - Restoring verifies the backup first, saves the current database as a `pre-restore` safety copy, and swaps the file in one step. Safety copies are never pruned.

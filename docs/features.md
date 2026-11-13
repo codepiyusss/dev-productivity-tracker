@@ -15,3 +15,4 @@
 - Time tracking with timers, manual entries and summaries
 - Recurring tasks (daily, weekly, monthly)
 - Database backup, verification, restore and pruning
+- Task dependencies with ready and blocked views
