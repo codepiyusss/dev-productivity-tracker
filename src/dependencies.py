@@ -59,3 +59,39 @@ def find_cycle_if_added(
         return None
 
     return [task_id] + path
+
+
+class DependencyManager:
+    """Link tasks so that one cannot be finished before another."""
+
+    def __init__(self, database):
+        self.database = database
+
+    def add(self, task_id: int, blocker_id: int) -> None:
+        """Make `task_id` wait for `blocker_id`.
+
+        Raises ValueError for unknown tasks, self-links, repeated links and
+        links that would create a loop (A waits on B, B waits on A).
+        """
+        for number in (task_id, blocker_id):
+            if self.database.get_task(number) is None:
+                raise ValueError(f"Task {number} not found.")
+
+        if task_id == blocker_id:
+            raise ValueError("A task cannot depend on itself.")
+
+        if blocker_id in self.database.get_blocker_ids(task_id):
+            raise ValueError(
+                f"Task {task_id} already depends on task {blocker_id}."
+            )
+
+        loop = find_cycle_if_added(
+            self.database.get_all_dependencies(), task_id, blocker_id
+        )
+        if loop:
+            chain = " -> ".join(str(number) for number in loop)
+            raise ValueError(
+                f"That would create a circular dependency: {chain}"
+            )
+
+        self.database.add_dependency(task_id, blocker_id)
