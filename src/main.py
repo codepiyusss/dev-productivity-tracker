@@ -573,7 +573,9 @@ def handle_edit(manager, args):
     return 0
 
 
-def format_task_details(task, tracked_seconds=0, timer_running=False):
+def format_task_details(
+    task, tracked_seconds=0, timer_running=False, waits_for=None, needed_by=None
+):
     """Multi-line view of a single task."""
     if task.completed:
         status = f"Completed ({task.completed_at})" if task.completed_at else "Completed"
@@ -592,6 +594,15 @@ def format_task_details(task, tracked_seconds=0, timer_running=False):
         f"  Description: {task.description or 'none'}",
     ]
 
+    def short_list(others):
+        return ", ".join(f"[{other.task_id}] {other.title}" for other in others)
+
+    if waits_for:
+        lines.insert(len(lines) - 1, f"  Waits for:   {short_list(waits_for)}")
+
+    if needed_by:
+        lines.insert(len(lines) - 1, f"  Needed by:   {short_list(needed_by)}")
+
     if tracked_seconds or timer_running:
         tracked = format_duration(tracked_seconds)
         lines.insert(len(lines) - 1, f"  Time spent:  {tracked}" + (" (timer running)" if timer_running else ""))
@@ -607,11 +618,14 @@ def handle_show(manager, args):
         return 1
 
     tracker = TimeTracker(manager.database)
+    dependencies = DependencyManager(manager.database)
     running = manager.database.get_running_entry()
     print(format_task_details(
         task,
         tracked_seconds=tracker.total_seconds(task.task_id),
         timer_running=bool(running and running["task_id"] == task.task_id),
+        waits_for=dependencies.get_blockers(task.task_id),
+        needed_by=dependencies.get_dependents(task.task_id),
     ))
     return 0
 
