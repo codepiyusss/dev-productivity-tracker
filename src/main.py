@@ -293,6 +293,12 @@ def build_parser():
         "blocker_id", type=positive_int, help="The task that must be done first"
     )
 
+    depend_remove = depend_commands.add_parser(
+        "remove", help="Stop TASK_ID waiting for BLOCKER_ID"
+    )
+    depend_remove.add_argument("task_id", type=positive_int)
+    depend_remove.add_argument("blocker_id", type=positive_int)
+
     stats = commands.add_parser("stats", help="Show productivity statistics")
     stats.add_argument(
         "--detailed", action="store_true",
@@ -661,6 +667,12 @@ def handle_depend(manager, args):
             print(
                 f"Task {task.task_id} ({task.title}) now waits for "
                 f"task {blocker.task_id} ({blocker.title})."
+            )
+
+        elif args.depend_command == "remove":
+            dependencies.remove(args.task_id, args.blocker_id)
+            print(
+                f"Task {args.task_id} no longer waits for task {args.blocker_id}."
             )
     except ValueError as error:
         print(error)
