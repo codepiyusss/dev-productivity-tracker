@@ -1,6 +1,7 @@
 ﻿from datetime import date, timedelta
 from collections import Counter
 
+from src.dependencies import DependencyManager
 from src.streaks import StreakTracker
 
 
@@ -161,6 +162,12 @@ class ProductivityAnalytics:
         due_soon = self.get_due_soon_tasks(today=today)
         if due_soon:
             insights.append(f"{len(due_soon)} task(s) are due in the next 7 days.")
+
+        blocked = DependencyManager(self.database).get_blocked_tasks()
+        if blocked:
+            insights.append(
+                f"{len(blocked)} task(s) are blocked by unfinished tasks."
+            )
 
         streak = StreakTracker(self.database).current_streak(today)
         if streak["length"] >= 2 and not streak["active_today"]:
