@@ -126,3 +126,15 @@ class DependencyManager:
         task = self.database.get_task(task_id)
 
         return bool(task and not task.completed and self.get_blockers(task_id))
+
+    def get_dependents(self, task_id: int, pending_only: bool = True) -> List[Task]:
+        """Tasks that are waiting on `task_id`."""
+        dependents = []
+
+        for dependent_id in self.database.get_dependent_ids(task_id):
+            dependent = self.database.get_task(dependent_id)
+
+            if dependent is not None and not (pending_only and dependent.completed):
+                dependents.append(dependent)
+
+        return dependents
