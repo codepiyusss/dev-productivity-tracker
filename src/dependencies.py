@@ -138,3 +138,35 @@ class DependencyManager:
                 dependents.append(dependent)
 
         return dependents
+
+    def get_blocker_map(self) -> Dict[int, List[int]]:
+        """{task_id: [unfinished blocker IDs]} for every blocked pending task."""
+        tasks = {task.task_id: task for task in self.database.get_all_tasks()}
+        blocked: Dict[int, List[int]] = {}
+
+        for task_id, blocker_id in self.database.get_all_dependencies():
+            task = tasks.get(task_id)
+            blocker = tasks.get(blocker_id)
+
+            if task and blocker and not task.completed and not blocker.completed:
+                blocked.setdefault(task_id, []).append(blocker_id)
+
+        return blocked
+
+    def get_blocked_tasks(self) -> List[Task]:
+        """Pending tasks that are waiting on at least one unfinished task."""
+        blocked = self.get_blocker_map()
+
+        return [
+            task for task in self.database.get_all_tasks(completed=False)
+            if task.task_id in blocked
+        ]
+
+    def get_ready_tasks(self) -> List[Task]:
+        """Pending tasks with nothing unfinished standing in their way."""
+        blocked = self.get_blocker_map()
+
+        return [
+            task for task in self.database.get_all_tasks(completed=False)
+            if task.task_id not in blocked
+        ]
