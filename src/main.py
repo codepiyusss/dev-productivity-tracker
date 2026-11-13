@@ -10,6 +10,7 @@ from src.backup import (
     verify_database
 )
 from src.database import Database
+from src.dependencies import DependencyManager
 from src.tasks import TaskManager
 from src.analytics import ProductivityAnalytics
 from src.recurrence import RULES
@@ -277,6 +278,19 @@ def build_parser():
     backup_prune.add_argument("--dir", dest="backup_dir")
     backup_prune.add_argument(
         "-y", "--yes", action="store_true", help="Delete without asking"
+    )
+
+    depend = commands.add_parser(
+        "depend", help="Make a task wait for other tasks"
+    )
+    depend_commands = depend.add_subparsers(dest="depend_command", required=True)
+
+    depend_add = depend_commands.add_parser(
+        "add", help="Task TASK_ID cannot be finished before BLOCKER_ID"
+    )
+    depend_add.add_argument("task_id", type=positive_int, help="The task that waits")
+    depend_add.add_argument(
+        "blocker_id", type=positive_int, help="The task that must be done first"
     )
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
@@ -634,6 +648,25 @@ def format_time_entry(entry):
         f"{format_duration(entry['seconds'])} | "
         f"task {entry['task_id']}: {entry['title']}{suffix}"
     )
+
+
+def handle_depend(manager, args):
+    dependencies = DependencyManager(manager.database)
+
+    try:
+        if args.depend_command == "add":
+            dependencies.add(args.task_id, args.blocker_id)
+            task = manager.get_task(args.task_id)
+            blocker = manager.get_task(args.blocker_id)
+            print(
+                f"Task {task.task_id} ({task.title}) now waits for "
+                f"task {blocker.task_id} ({blocker.title})."
+            )
+    except ValueError as error:
+        print(error)
+        return 1
+
+    return 0
 
 
 def handle_backup(manager, args):
@@ -1040,6 +1073,9 @@ def _run(argv=None):
 
     if args.command == "backup":
         return handle_backup(manager, args)
+
+    if args.command == "depend":
+        return handle_depend(manager, args)
 
     if args.command == "show":
         return handle_show(manager, args)
