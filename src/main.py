@@ -299,6 +299,11 @@ def build_parser():
     depend_remove.add_argument("task_id", type=positive_int)
     depend_remove.add_argument("blocker_id", type=positive_int)
 
+    depend_list = depend_commands.add_parser(
+        "list", help="Show what a task waits for and what waits for it"
+    )
+    depend_list.add_argument("task_id", type=positive_int)
+
     stats = commands.add_parser("stats", help="Show productivity statistics")
     stats.add_argument(
         "--detailed", action="store_true",
@@ -656,6 +661,29 @@ def format_time_entry(entry):
     )
 
 
+def format_dependencies(task, blockers, dependents):
+    """Text showing both directions of a task's dependencies."""
+    def line(other):
+        status = "done" if other.completed else "pending"
+        return f"  [{other.task_id}] {other.title} ({status})"
+
+    lines = [f"Task {task.task_id}: {task.title}"]
+
+    if not blockers and not dependents:
+        lines.append("  No dependencies.")
+        return "\n".join(lines)
+
+    if blockers:
+        lines.append("Waits for:")
+        lines.extend(line(other) for other in blockers)
+
+    if dependents:
+        lines.append("Is needed by:")
+        lines.extend(line(other) for other in dependents)
+
+    return "\n".join(lines)
+
+
 def handle_depend(manager, args):
     dependencies = DependencyManager(manager.database)
 
@@ -668,6 +696,19 @@ def handle_depend(manager, args):
                 f"Task {task.task_id} ({task.title}) now waits for "
                 f"task {blocker.task_id} ({blocker.title})."
             )
+
+        elif args.depend_command == "list":
+            task = manager.get_task(args.task_id)
+
+            if task is None:
+                print("Task not found.")
+                return 1
+
+            print(format_dependencies(
+                task,
+                dependencies.get_blockers(task.task_id, pending_only=False),
+                dependencies.get_dependents(task.task_id, pending_only=False),
+            ))
 
         elif args.depend_command == "remove":
             dependencies.remove(args.task_id, args.blocker_id)
