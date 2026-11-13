@@ -1,6 +1,8 @@
 from collections import deque
 from typing import Dict, Iterable, List, Optional, Tuple
 
+from src.models.task import Task
+
 
 def _blockers_map(edges: Iterable[Tuple[int, int]]) -> Dict[int, List[int]]:
     mapping: Dict[int, List[int]] = {}
@@ -102,3 +104,25 @@ class DependencyManager:
             raise ValueError(
                 f"Task {task_id} does not depend on task {blocker_id}."
             )
+
+    def get_blockers(self, task_id: int, pending_only: bool = True) -> List[Task]:
+        """Tasks that `task_id` is waiting on.
+
+        By default only unfinished blockers are returned, because a
+        completed blocker no longer holds anything up.
+        """
+        blockers = []
+
+        for blocker_id in self.database.get_blocker_ids(task_id):
+            blocker = self.database.get_task(blocker_id)
+
+            if blocker is not None and not (pending_only and blocker.completed):
+                blockers.append(blocker)
+
+        return blockers
+
+    def is_blocked(self, task_id: int) -> bool:
+        """True if a pending task is waiting on at least one unfinished task."""
+        task = self.database.get_task(task_id)
+
+        return bool(task and not task.completed and self.get_blockers(task_id))
