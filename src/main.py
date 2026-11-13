@@ -412,7 +412,7 @@ def is_overdue(due_date, today=None):
         return False
 
 
-def format_task_line(task, today=None):
+def format_task_line(task, today=None, blocked_by=None):
     status = "Done" if task.completed else "Pending"
     line = (
         f"[{task.task_id}] {task.title} | "
@@ -427,6 +427,9 @@ def format_task_line(task, today=None):
 
     if task.recurrence:
         line += f" | repeats {task.recurrence}"
+
+    if blocked_by and not task.completed:
+        line += " | BLOCKED by " + ",".join(str(number) for number in blocked_by)
 
     if task.tags:
         line += " | " + " ".join(f"#{tag}" for tag in task.tags)
@@ -1192,8 +1195,12 @@ def _run(argv=None):
             print("No matching tasks found.")
             return
 
+        blocker_map = DependencyManager(manager.database).get_blocker_map()
+
         for task in tasks:
-            print(format_task_line(task))
+            print(format_task_line(
+                task, blocked_by=blocker_map.get(task.task_id)
+            ))
 
     elif args.command == "complete":
         stopped = None
