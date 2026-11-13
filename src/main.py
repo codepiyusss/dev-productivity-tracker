@@ -1250,6 +1250,11 @@ def _run(argv=None):
                 )
             if stopped:
                 print(f"Timer stopped automatically ({format_duration(stopped['seconds'])}).")
+            freed = DependencyManager(manager.database).get_newly_ready(args.task_id)
+            if freed:
+                print("Now ready to start:")
+                for freed_task in freed:
+                    print(f"  [{freed_task.task_id}] {freed_task.title}")
             for item in GoalTracker(manager.database).get_all_progress():
                 print(format_progress(item))
             print(describe_streak(manager))
