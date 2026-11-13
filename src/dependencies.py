@@ -95,3 +95,10 @@ class DependencyManager:
             )
 
         self.database.add_dependency(task_id, blocker_id)
+
+    def remove(self, task_id: int, blocker_id: int) -> None:
+        """Remove a link. Raises ValueError if the link does not exist."""
+        if not self.database.remove_dependency(task_id, blocker_id):
+            raise ValueError(
+                f"Task {task_id} does not depend on task {blocker_id}."
+            )
