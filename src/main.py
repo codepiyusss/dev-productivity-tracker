@@ -325,6 +325,10 @@ def build_parser():
 
     complete = commands.add_parser("complete", help="Complete a task")
     complete.add_argument("task_id", type=positive_int)
+    complete.add_argument(
+        "--force", action="store_true",
+        help="Complete the task even if it is waiting on unfinished tasks"
+    )
 
     show = commands.add_parser("show", help="Show all details of one task")
     show.add_argument("task_id", type=positive_int)
@@ -1217,6 +1221,19 @@ def _run(argv=None):
             ))
 
     elif args.command == "complete":
+        blockers = DependencyManager(manager.database).get_blockers(args.task_id)
+        task_to_complete = manager.get_task(args.task_id)
+
+        if (
+            blockers and not args.force
+            and task_to_complete is not None and not task_to_complete.completed
+        ):
+            print(f"Task {args.task_id} is waiting on unfinished tasks:")
+            for blocker in blockers:
+                print(f"  [{blocker.task_id}] {blocker.title}")
+            print("Finish those first, or use --force to complete it anyway.")
+            return 1
+
         stopped = None
         running = manager.database.get_running_entry()
         if running and running["task_id"] == args.task_id:
