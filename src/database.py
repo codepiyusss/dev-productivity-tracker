@@ -99,6 +99,24 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_time_entries_task "
                 "ON time_entries (task_id)"
             )
+            # Migration: task dependencies. A row means "task_id cannot be
+            # finished until depends_on is". Rows disappear with either task.
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS task_dependencies (
+                    task_id INTEGER NOT NULL,
+                    depends_on INTEGER NOT NULL,
+                    PRIMARY KEY (task_id, depends_on),
+                    CHECK (task_id != depends_on),
+                    FOREIGN KEY (task_id) REFERENCES tasks (task_id)
+                        ON DELETE CASCADE,
+                    FOREIGN KEY (depends_on) REFERENCES tasks (task_id)
+                        ON DELETE CASCADE
+                )
+            """)
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_dependencies_depends_on "
+                "ON task_dependencies (depends_on)"
+            )
             # Migration: productivity goals (one target per period).
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS goals (
@@ -287,6 +305,49 @@ class Database:
                 "DELETE FROM goals WHERE period = ?", (period,)
             )
         return cursor.rowcount > 0
+
+    def add_dependency(self, task_id: int, depends_on: int) -> None:
+        """Record that `task_id` is blocked by `depends_on`."""
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO task_dependencies (task_id, depends_on) VALUES (?, ?)",
+                (task_id, depends_on)
+            )
+
+    def remove_dependency(self, task_id: int, depends_on: int) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM task_dependencies WHERE task_id = ? AND depends_on = ?",
+                (task_id, depends_on)
+            )
+        return cursor.rowcount > 0
+
+    def get_blocker_ids(self, task_id: int) -> List[int]:
+        """Tasks that `task_id` is waiting on."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT depends_on FROM task_dependencies "
+                "WHERE task_id = ? ORDER BY depends_on", (task_id,)
+            ).fetchall()
+        return [row["depends_on"] for row in rows]
+
+    def get_dependent_ids(self, task_id: int) -> List[int]:
+        """Tasks that are waiting on `task_id`."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT task_id FROM task_dependencies "
+                "WHERE depends_on = ? ORDER BY task_id", (task_id,)
+            ).fetchall()
+        return [row["task_id"] for row in rows]
+
+    def get_all_dependencies(self) -> List[tuple]:
+        """Every (task_id, depends_on) pair."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT task_id, depends_on FROM task_dependencies "
+                "ORDER BY task_id, depends_on"
+            ).fetchall()
+        return [(row["task_id"], row["depends_on"]) for row in rows]
 
     def get_tag_counts(self) -> Dict[str, int]:
         """Return {tag: number_of_tasks}, sorted by tag name."""
