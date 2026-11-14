@@ -23,6 +23,7 @@ from src.exporter import export_tasks
 from src.goals import PERIODS, GoalTracker, format_progress
 from src.importer import import_tasks_csv
 from src.today import build_today_summary, format_today
+from src.search import search_journal, search_tasks
 from src.timetracking import (
     STALE_AFTER_SECONDS, TimeTracker, format_time_summary
 )
@@ -321,6 +322,18 @@ def build_parser():
 
     commands.add_parser(
         "doctor", help="Check the database and installation for problems"
+    )
+
+    search = commands.add_parser(
+        "search", help="Search tasks and journal entries"
+    )
+    search.add_argument("query", nargs="+", help="Words to look for (all must match)")
+    where = search.add_mutually_exclusive_group()
+    where.add_argument("--tasks", action="store_true", help="Search tasks only")
+    where.add_argument("--journal", action="store_true", help="Search the journal only")
+    search.add_argument(
+        "--limit", type=positive_int, default=10,
+        help="Most results to show per section (default: 10)"
     )
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
@@ -722,6 +735,49 @@ def format_dependencies(task, blockers, dependents):
         lines.extend(line(other) for other in dependents)
 
     return "\n".join(lines)
+
+
+def handle_search(manager, args):
+    query = " ".join(args.query)
+    search_everything = not (args.tasks or args.journal)
+
+    try:
+        task_hits = (
+            search_tasks(manager.get_all_tasks(), query)
+            if search_everything or args.tasks else []
+        )
+        journal_hits = (
+            search_journal(
+                ProductivityJournal(manager.database.db_path).get_all_entries(),
+                query
+            )
+            if search_everything or args.journal else []
+        )
+    except ValueError as error:
+        print(error)
+        return 1
+
+    if not task_hits and not journal_hits:
+        print(f'No matches for "{query}".')
+        return 0
+
+    if task_hits:
+        print(f"Tasks ({len(task_hits)}):")
+        for hit in task_hits[:args.limit]:
+            print(f"  {format_task_line(hit['task'])}  (matched: {', '.join(hit['fields'])})")
+        if len(task_hits) > args.limit:
+            print(f"  ...and {len(task_hits) - args.limit} more. Use --limit to see more.")
+
+    if journal_hits:
+        if task_hits:
+            print()
+        print(f"Journal ({len(journal_hits)}):")
+        for hit in journal_hits[:args.limit]:
+            print(f"  {hit['entry']['entry_date']}  {hit['snippet']}  ({hit['fields'][0]})")
+        if len(journal_hits) > args.limit:
+            print(f"  ...and {len(journal_hits) - args.limit} more. Use --limit to see more.")
+
+    return 0
 
 
 def handle_depend(manager, args):
@@ -1180,6 +1236,9 @@ def _run(argv=None):
     if args.command == "today":
         print(format_today(build_today_summary(manager.database)))
         return 0
+
+    if args.command == "search":
+        return handle_search(manager, args)
 
     if args.command == "show":
         return handle_show(manager, args)
