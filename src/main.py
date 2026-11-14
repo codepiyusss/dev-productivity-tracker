@@ -21,6 +21,7 @@ from src.task_filters import filter_tasks
 from src.journal import ProductivityJournal
 from src.exporter import export_tasks
 from src.goals import PERIODS, GoalTracker, format_progress
+from src.housekeeping import describe_purge, find_purgeable, purge_tasks
 from src.importer import import_tasks_csv
 from src.today import build_today_summary, format_today
 from src.search import search_journal, search_tasks
@@ -335,6 +336,25 @@ def build_parser():
         "--limit", type=positive_int, default=10,
         help="Most results to show per section (default: 10)"
     )
+
+    purge = commands.add_parser(
+        "purge", help="Delete old completed tasks (a backup is saved first)"
+    )
+    purge.add_argument(
+        "--older-than", dest="older_than", type=positive_int, required=True,
+        metavar="DAYS", help="Only tasks completed at least this many days ago"
+    )
+    purge.add_argument(
+        "--dry-run", action="store_true", help="Show what would be deleted, then stop"
+    )
+    purge.add_argument(
+        "--include-undated", action="store_true",
+        help="Also include completed tasks with no recorded completion date"
+    )
+    purge.add_argument(
+        "--no-backup", action="store_true", help="Skip the automatic backup"
+    )
+    purge.add_argument("-y", "--yes", action="store_true", help="Delete without asking")
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
     stats.add_argument(
@@ -735,6 +755,50 @@ def format_dependencies(task, blockers, dependents):
         lines.extend(line(other) for other in dependents)
 
     return "\n".join(lines)
+
+
+def handle_purge(manager, args):
+    database = manager.database
+    tasks = find_purgeable(
+        database, args.older_than, include_undated=args.include_undated
+    )
+
+    if not tasks:
+        print(f"Nothing to purge: no completed tasks finished {args.older_than}+ days ago.")
+        return 0
+
+    summary = describe_purge(database, tasks)
+    print(f"{len(tasks)} completed task(s) finished {args.older_than}+ days ago would be deleted:")
+    for task in tasks[:10]:
+        when = task.completed_at[:10] if task.completed_at else "unknown date"
+        print(f"  [{task.task_id}] {task.title} (completed {when})")
+    if len(tasks) > 10:
+        print(f"  ...and {len(tasks) - 10} more.")
+    print(
+        f"This also removes {summary['time_entries']} time entr"
+        f"{'y' if summary['time_entries'] == 1 else 'ies'} and "
+        f"{summary['dependency_links']} dependency link(s)."
+    )
+
+    if args.dry_run:
+        print("Dry run: nothing was deleted.")
+        return 0
+
+    if not args.yes and not confirm("Permanently delete these tasks?"):
+        print("Cancelled. Nothing was deleted.")
+        return 0
+
+    if not args.no_backup:
+        try:
+            info = create_backup(database.db_path, label="before-purge")
+        except ValueError as error:
+            print(f"Backup failed, so nothing was deleted: {error}")
+            return 1
+        print(f"Backup saved: {info['path']}")
+
+    purge_tasks(database, tasks)
+    print(f"Deleted {len(tasks)} task(s).")
+    return 0
 
 
 def handle_search(manager, args):
@@ -1239,6 +1303,9 @@ def _run(argv=None):
 
     if args.command == "search":
         return handle_search(manager, args)
+
+    if args.command == "purge":
+        return handle_purge(manager, args)
 
     if args.command == "show":
         return handle_show(manager, args)
