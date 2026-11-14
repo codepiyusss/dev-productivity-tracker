@@ -48,3 +48,10 @@ def test_ci_workflow_runs_the_tests_on_linux_and_windows():
     assert "ubuntu-latest" in workflow and "windows-latest" in workflow
     assert "python -m pytest" in workflow
     assert "pip install -r requirements.txt" in workflow
+
+
+def test_docs_do_not_contain_personal_paths():
+    for path in [ROOT / "README.md", ROOT / "CHANGELOG.md", *(ROOT / "docs").glob("*.md")]:
+        text = path.read_text(encoding="utf-8")
+
+        assert not re.search(r"[A-Za-z]:\\(Users|ALL PROJECTS)", text), f"personal path in {path.name}"
