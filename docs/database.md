@@ -79,3 +79,11 @@ table is created with `CREATE TABLE IF NOT EXISTS`, so existing databases upgrad
 without data loss. Only unfinished blockers hold a task up: once a blocker is completed
 the task counts as ready. Circular chains (A waits for B, B waits for A, or longer loops)
 are rejected when a link is added.
+
+## Purging old tasks
+
+`purge` deletes completed tasks that were finished at least N days ago. Tasks completed
+before completion times were tracked have no date, so they are only included with
+`--include-undated`. Deleting a task also deletes its tags, time entries and dependency
+links (`ON DELETE CASCADE`). A `before-purge` backup is saved first, so a purge can be
+undone with `backup restore`.
