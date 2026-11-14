@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from src.models.task import Task
 
@@ -43,3 +43,40 @@ def find_purgeable(
         result.extend(sorted(undated, key=lambda task: task.task_id))
 
     return result
+
+
+def describe_purge(database, tasks: List[Task]) -> Dict[str, int]:
+    """What deleting `tasks` would remove, without deleting anything.
+
+    Time entries, tags and dependency links are deleted along with their task.
+    """
+    entries = 0
+    ids = {task.task_id for task in tasks}
+
+    for task_id in ids:
+        entries += len(database.get_time_entries(task_id=task_id))
+
+    dependency_links = sum(
+        1 for task_id, depends_on in database.get_all_dependencies()
+        if task_id in ids or depends_on in ids
+    )
+
+    return {
+        "tasks": len(ids),
+        "time_entries": entries,
+        "dependency_links": dependency_links,
+    }
+
+
+def purge_tasks(database, tasks: List[Task]) -> Dict[str, int]:
+    """Permanently delete the given tasks and everything attached to them.
+
+    Returns what was removed (see `describe_purge`). Callers should make a
+    backup first; this cannot be undone.
+    """
+    summary = describe_purge(database, tasks)
+
+    for task in tasks:
+        database.delete_task(task.task_id)
+
+    return summary
