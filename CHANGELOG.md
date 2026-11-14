@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Add `search` command: finds tasks (title, tags, category, description) and journal entries (achievements, challenges, next steps), best matches first. All words must match; use `--tasks`, `--journal` and `--limit`.
 - Add `doctor` command: checks database integrity, schema, odd data (bad due dates, repeating tasks without due dates, forgotten timers), backup freshness and Python/SQLite versions. It exits with code 1 if it finds a real problem and works even on a damaged or missing database.
 - Add `today` command: overdue, due today and upcoming tasks, running timer, goal progress, streak, and how many tasks are ready or blocked.
 - Add task dependencies: `depend add TASK BLOCKER`, `depend remove` and `depend list`. A task can wait for one or more others; circular chains are rejected.
