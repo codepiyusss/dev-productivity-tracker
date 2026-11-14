@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Add `today` command: overdue, due today and upcoming tasks, running timer, goal progress, streak, and how many tasks are ready or blocked.
 - Add task dependencies: `depend add TASK BLOCKER`, `depend remove` and `depend list`. A task can wait for one or more others; circular chains are rejected.
 - `list --ready` shows pending tasks nothing is blocking, and `list --blocked` shows tasks waiting on unfinished tasks. Blocked tasks are marked `BLOCKED by ...` in listings.
 - `complete` refuses to finish a blocked task unless `--force` is given, and announces tasks that were freed up.
