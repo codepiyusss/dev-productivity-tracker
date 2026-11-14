@@ -29,3 +29,13 @@ def test_every_requirement_is_actually_used():
 
 def test_requirements_still_include_the_test_runner():
     assert "pytest" in requirement_names()
+
+
+def test_gitignore_covers_personal_data_and_generated_files():
+    lines = {
+        line.strip() for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    }
+
+    for pattern in ("*.db", "data/", "backups/", "productivity_report.txt",
+                    ".pytest_cache/", ".venv/", "__pycache__/", "*.tmp"):
+        assert pattern in lines, f"{pattern} should be ignored"
