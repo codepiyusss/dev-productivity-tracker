@@ -55,3 +55,49 @@ def search_tasks(tasks, query: str) -> List[Dict]:
 
     results.sort(key=lambda item: (-item["score"], -item["task"].task_id))
     return results
+
+
+JOURNAL_FIELDS = ("achievements", "challenges", "next_steps")
+
+
+def _snippet(text: str, term: str, length: int = 60) -> str:
+    """A short excerpt of `text` around the first occurrence of `term`."""
+    flat = " ".join(text.split())
+    position = flat.casefold().find(term)
+    start = max(position - 20, 0) if position >= 0 else 0
+    excerpt = flat[start:start + length]
+
+    return ("..." if start > 0 else "") + excerpt + ("..." if start + length < len(flat) else "")
+
+
+def search_journal(entries, query: str) -> List[Dict]:
+    """Journal entries matching every word, newest first.
+
+    `entries` are dictionaries with `entry_date`, `achievements`,
+    `challenges` and `next_steps`. Each result is {"entry", "fields",
+    "snippet"}, where the snippet is an excerpt around the first match.
+    """
+    terms = split_terms(query)
+    results = []
+
+    for entry in entries:
+        lowered = {
+            field: (entry.get(field) or "").casefold() for field in JOURNAL_FIELDS
+        }
+
+        if not all(any(term in text for text in lowered.values()) for term in terms):
+            continue
+
+        fields = [
+            field for field in JOURNAL_FIELDS
+            if any(term in lowered[field] for term in terms)
+        ]
+        first_term = next(term for term in terms if term in lowered[fields[0]])
+        results.append({
+            "entry": entry,
+            "fields": fields,
+            "snippet": _snippet(entry.get(fields[0]) or "", first_term),
+        })
+
+    results.sort(key=lambda item: item["entry"]["entry_date"], reverse=True)
+    return results
