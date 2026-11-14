@@ -17,3 +17,4 @@
 - Database backup, verification, restore and pruning
 - Task dependencies with ready and blocked views
 - Daily dashboard (`today`)
+- Health check (`doctor`)
