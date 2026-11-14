@@ -1,11 +1,12 @@
 import sqlite3
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from typing import List
 
-from src.backup import _open_read_only, verify_database
+from src.backup import _open_read_only, default_backup_dir, list_backups, verify_database
 from src.timetracking import STALE_AFTER_SECONDS, TIMESTAMP_FORMAT
 from src.utils import validate_due_date
 
@@ -153,5 +154,49 @@ def check_data(db_path, now: Optional[datetime] = None) -> List[CheckResult]:
         results.append(CheckResult("Data", FAIL, f"Could not read tasks: {error}"))
     finally:
         connection.close()
+
+    return results
+
+
+STALE_BACKUP_DAYS = 30
+
+
+def check_backups(db_path, now: Optional[datetime] = None) -> CheckResult:
+    """Is there a recent backup of this database?"""
+    now = now or datetime.now()
+    folder = default_backup_dir(db_path)
+    backups = [b for b in list_backups(folder) if b["label"] != "pre-restore"]
+
+    if not backups:
+        return CheckResult(
+            "Backups", WARN, "No backups yet. Create one with: backup create"
+        )
+
+    newest = backups[0]
+    age_days = (now - newest["created"]).days
+
+    if age_days > STALE_BACKUP_DAYS:
+        return CheckResult(
+            "Backups", WARN,
+            f"Your newest backup is {age_days} days old. Create a fresh one with: backup create"
+        )
+
+    when = "today" if age_days == 0 else f"{age_days} day(s) ago"
+    return CheckResult("Backups", OK, f"Newest backup was made {when} ({len(backups)} saved).")
+
+
+def check_environment() -> CheckResult:
+    """Which Python and SQLite versions are in use (for bug reports)."""
+    python = ".".join(str(part) for part in sys.version_info[:3])
+
+    return CheckResult("Environment", INFO, f"Python {python}, SQLite {sqlite3.sqlite_version}.")
+
+
+def run_checks(db_path, now: Optional[datetime] = None) -> List[CheckResult]:
+    """Run every check and return the results in display order."""
+    results = [check_database(db_path), check_schema(db_path)]
+    results.extend(check_data(db_path, now))
+    results.append(check_backups(db_path, now))
+    results.append(check_environment())
 
     return results
