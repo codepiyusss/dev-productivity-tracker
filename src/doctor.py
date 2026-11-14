@@ -200,3 +200,27 @@ def run_checks(db_path, now: Optional[datetime] = None) -> List[CheckResult]:
     results.append(check_environment())
 
     return results
+
+
+_LABELS = {OK: "OK", WARN: "WARN", FAIL: "FAIL", INFO: "INFO"}
+
+
+def format_doctor_report(results: List[CheckResult]) -> str:
+    """One line per check followed by a summary line."""
+    lines = [
+        f"[{_LABELS[result.status]:>4}] {result.name}: {result.detail}"
+        for result in results
+    ]
+    warnings = sum(1 for r in results if r.status == WARN)
+    failures = sum(1 for r in results if r.status == FAIL)
+    passed = sum(1 for r in results if r.status == OK)
+
+    lines.append("")
+    if failures:
+        lines.append(f"{failures} problem(s) found, {warnings} warning(s), {passed} check(s) passed.")
+    elif warnings:
+        lines.append(f"No problems, but {warnings} warning(s). {passed} check(s) passed.")
+    else:
+        lines.append(f"All good. {passed} check(s) passed.")
+
+    return "\n".join(lines)
