@@ -39,3 +39,12 @@ def test_gitignore_covers_personal_data_and_generated_files():
     for pattern in ("*.db", "data/", "backups/", "productivity_report.txt",
                     ".pytest_cache/", ".venv/", "__pycache__/", "*.tmp"):
         assert pattern in lines, f"{pattern} should be ignored"
+
+
+def test_ci_workflow_runs_the_tests_on_linux_and_windows():
+    workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+
+    assert "pull_request" in workflow
+    assert "ubuntu-latest" in workflow and "windows-latest" in workflow
+    assert "python -m pytest" in workflow
+    assert "pip install -r requirements.txt" in workflow
