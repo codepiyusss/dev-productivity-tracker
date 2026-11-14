@@ -2,9 +2,10 @@ from datetime import date, datetime, timedelta
 from typing import Dict, Optional
 
 from src.dependencies import DependencyManager
-from src.goals import GoalTracker
+from src.goals import GoalTracker, format_progress
 from src.streaks import StreakTracker
 from src.timetracking import TimeTracker
+from src.utils import format_duration
 
 UPCOMING_DAYS = 3
 
@@ -62,3 +63,64 @@ def build_today_summary(
         "streak": streaks.current_streak(today),
         "done_today": done_today,
     }
+
+
+def _task_line(task, show_due: bool) -> str:
+    line = f"  [{task.task_id}] {task.title}"
+
+    if task.priority == "high":
+        line += " (high priority)"
+
+    if show_due and task.due_date:
+        line += f" - due {task.due_date}"
+
+    return line
+
+
+def format_today(summary: Dict) -> str:
+    """Readable text for a summary from `build_today_summary`."""
+    day = summary["date"]
+    lines = [f"Today: {day.isoformat()} ({day.strftime('%A')})"]
+
+    timer = summary["timer"]
+    if timer:
+        lines += ["", (
+            f"Timer running on task {timer['task_id']}: {timer['title']} "
+            f"({format_duration(timer['seconds'])})"
+        )]
+
+    sections = (
+        ("Overdue", summary["overdue"], True),
+        ("Due today", summary["due_today"], False),
+        (f"Coming up (next {summary['upcoming_days']} days)", summary["upcoming"], True),
+    )
+    nothing_due = True
+
+    for title, tasks, show_due in sections:
+        if tasks:
+            nothing_due = False
+            lines += ["", f"{title} ({len(tasks)}):"]
+            lines += [_task_line(task, show_due) for task in tasks]
+
+    if nothing_due:
+        lines += ["", f"Nothing is due in the next {summary['upcoming_days']} days."]
+
+    pending = summary["pending_count"]
+    if pending:
+        ready = f"{summary['ready_count']} ready to start"
+        blocked = summary["blocked_count"]
+        extra = f", {blocked} blocked" if blocked else ""
+        lines += ["", f"Pending: {pending} ({ready}{extra})"]
+
+    if summary["goals"]:
+        lines.append("")
+        lines += [format_progress(goal) for goal in summary["goals"]]
+
+    streak = summary["streak"]["length"]
+    done = summary["done_today"]
+    lines.append("")
+    lines.append(f"Completed today: {done}")
+    if streak:
+        lines.append(f"Streak: {streak} day{'s' if streak != 1 else ''}")
+
+    return "\n".join(lines)
