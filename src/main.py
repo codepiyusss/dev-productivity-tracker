@@ -21,6 +21,7 @@ from src.journal import ProductivityJournal
 from src.exporter import export_tasks
 from src.goals import PERIODS, GoalTracker, format_progress
 from src.importer import import_tasks_csv
+from src.today import build_today_summary, format_today
 from src.timetracking import (
     STALE_AFTER_SECONDS, TimeTracker, format_time_summary
 )
@@ -312,6 +313,10 @@ def build_parser():
         "list", help="Show what a task waits for and what waits for it"
     )
     depend_list.add_argument("task_id", type=positive_int)
+
+    commands.add_parser(
+        "today", help="Your day at a glance: overdue, due today, timer, goals"
+    )
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
     stats.add_argument(
@@ -1159,6 +1164,10 @@ def _run(argv=None):
 
     if args.command == "depend":
         return handle_depend(manager, args)
+
+    if args.command == "today":
+        print(format_today(build_today_summary(manager.database)))
+        return 0
 
     if args.command == "show":
         return handle_show(manager, args)
