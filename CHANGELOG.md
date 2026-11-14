@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- Add `purge --older-than DAYS` to delete old completed tasks. It shows a preview (`--dry-run` stops there), saves a `before-purge` backup, and asks before deleting; `--yes`, `--no-backup` and `--include-undated` adjust that. Time entries, tags and dependency links go with their tasks.
+- Add a GitHub Actions workflow that runs the tests on Linux and Windows (Python 3.12 and 3.13).
+- Remove the unused `matplotlib` dependency; tests now fail if a requirement is not actually used.
+- Ignore local data, backups, generated reports and tool caches in git.
+- Rewrite the installation guide with setup, a first run, data locations and testing.
 - Add `search` command: finds tasks (title, tags, category, description) and journal entries (achievements, challenges, next steps), best matches first. All words must match; use `--tasks`, `--journal` and `--limit`.
 - Add `doctor` command: checks database integrity, schema, odd data (bad due dates, repeating tasks without due dates, forgotten timers), backup freshness and Python/SQLite versions. It exits with code 1 if it finds a real problem and works even on a damaged or missing database.
 - Add `today` command: overdue, due today and upcoming tasks, running timer, goal progress, streak, and how many tasks are ready or blocked.

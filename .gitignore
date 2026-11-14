@@ -7,3 +7,13 @@ __pycache__/
 # Exported task files
 tasks_export.*
 exports/
+
+# Test and tool caches
+.pytest_cache/
+
+# Local data and generated files
+data/
+backups/
+productivity_report.txt
+*.tmp
+.DS_Store
