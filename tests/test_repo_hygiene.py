@@ -1,0 +1,31 @@
+import re
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def requirement_names():
+    names = []
+    for line in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            names.append(re.split(r"[<>=!~\[; ]", line, maxsplit=1)[0].casefold())
+    return names
+
+
+def python_sources():
+    files = list((ROOT / "src").rglob("*.py")) + list((ROOT / "tests").rglob("*.py"))
+    return "\n".join(f.read_text(encoding="utf-8-sig") for f in files if f.name != "test_repo_hygiene.py")
+
+
+def test_every_requirement_is_actually_used():
+    sources = python_sources()
+
+    for name in requirement_names():
+        assert re.search(rf"^\s*(import|from)\s+{re.escape(name)}\b", sources, re.M), (
+            f"{name} is in requirements.txt but never imported"
+        )
+
+
+def test_requirements_still_include_the_test_runner():
+    assert "pytest" in requirement_names()
