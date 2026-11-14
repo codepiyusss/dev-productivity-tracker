@@ -10,6 +10,7 @@ from src.backup import (
     verify_database
 )
 from src.database import Database
+from src.doctor import format_doctor_report, has_failures, run_checks
 from src.dependencies import DependencyManager
 from src.tasks import TaskManager
 from src.analytics import ProductivityAnalytics
@@ -316,6 +317,10 @@ def build_parser():
 
     commands.add_parser(
         "today", help="Your day at a glance: overdue, due today, timer, goals"
+    )
+
+    commands.add_parser(
+        "doctor", help="Check the database and installation for problems"
     )
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
@@ -1127,6 +1132,13 @@ def _run(argv=None):
     if args.command == "journal":
         handle_journal(args)
         return
+
+    if args.command == "doctor":
+        # Runs before the database is opened, so it can examine a damaged
+        # or missing file instead of failing on it.
+        results = run_checks(args.db or "data/productivity.db")
+        print(format_doctor_report(results))
+        return 1 if has_failures(results) else 0
 
     manager = TaskManager(Database(args.db) if args.db else None)
     if args.command == "reminders":
