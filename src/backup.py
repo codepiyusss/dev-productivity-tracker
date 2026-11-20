@@ -187,7 +187,11 @@ def verify_database(path) -> list:
         broken = connection.execute("PRAGMA foreign_key_check").fetchall()
         if broken:
             problems.append(
-                f"{len(broken)} row(s) point to records that no longer exist."
+                (
+                    "1 row points to a record that no longer exists."
+                    if len(broken) == 1 else
+                    f"{len(broken)} rows point to records that no longer exist."
+                )
             )
     except sqlite3.DatabaseError as error:
         problems.append(f"Database error: {error}")

@@ -8,7 +8,7 @@ from typing import List
 
 from src.backup import _open_read_only, default_backup_dir, list_backups, verify_database
 from src.timetracking import STALE_AFTER_SECONDS, TIMESTAMP_FORMAT
-from src.utils import validate_due_date
+from src.utils import pluralize, validate_due_date
 
 OK, WARN, FAIL, INFO = "ok", "warn", "fail", "info"
 REQUIRED_TABLES = (
@@ -104,13 +104,17 @@ def check_data(db_path, now: Optional[datetime] = None) -> List[CheckResult]:
                 validate_due_date(due_date)
             except ValueError:
                 bad_dates.append(task_id)
-        results.append(
-            CheckResult("Due dates", WARN,
-                        f"{len(bad_dates)} task(s) have unreadable due dates "
-                        f"(IDs: {', '.join(map(str, bad_dates[:10]))}). "
-                        "Fix them with: edit ID --due-date YYYY-MM-DD")
-            if bad_dates else CheckResult("Due dates", OK, "All due dates are valid.")
-        )
+        if bad_dates:
+            ids = ", ".join(map(str, bad_dates[:10]))
+            if len(bad_dates) == 1:
+                detail = (f"1 task has an unreadable due date (ID: {ids}). "
+                          "Fix it with: edit ID --due-date YYYY-MM-DD")
+            else:
+                detail = (f"{len(bad_dates)} tasks have unreadable due dates (IDs: {ids}). "
+                          "Fix them with: edit ID --due-date YYYY-MM-DD")
+            results.append(CheckResult("Due dates", WARN, detail))
+        else:
+            results.append(CheckResult("Due dates", OK, "All due dates are valid."))
 
         rows = _query(
             connection,
@@ -120,7 +124,9 @@ def check_data(db_path, now: Optional[datetime] = None) -> List[CheckResult]:
         broken = rows[0][0] if rows else 0
         results.append(
             CheckResult("Repeating tasks", WARN,
-                        f"{broken} repeating task(s) have no due date, so they cannot repeat.")
+                        (f"1 repeating task has no due date, so it cannot repeat."
+                         if broken == 1 else
+                         f"{broken} repeating tasks have no due date, so they cannot repeat."))
             if broken else CheckResult("Repeating tasks", OK, "All repeating tasks have due dates.")
         )
 
@@ -147,8 +153,13 @@ def check_data(db_path, now: Optional[datetime] = None) -> List[CheckResult]:
         if legacy:
             results.append(CheckResult(
                 "Completion times", INFO,
-                f"{legacy} completed task(s) have no completion time (they were "
-                "finished before time tracking). They do not count toward goals or streaks."
+                (
+                    "1 completed task has no completion time (it was finished before "
+                    "time tracking). It does not count toward goals or streaks."
+                    if legacy == 1 else
+                    f"{legacy} completed tasks have no completion time (they were "
+                    "finished before time tracking). They do not count toward goals or streaks."
+                )
             ))
     except sqlite3.DatabaseError as error:
         results.append(CheckResult("Data", FAIL, f"Could not read tasks: {error}"))
@@ -181,7 +192,7 @@ def check_backups(db_path, now: Optional[datetime] = None) -> CheckResult:
             f"Your newest backup is {age_days} days old. Create a fresh one with: backup create"
         )
 
-    when = "today" if age_days == 0 else f"{age_days} day(s) ago"
+    when = "today" if age_days == 0 else f"{pluralize(age_days, 'day')} ago"
     return CheckResult("Backups", OK, f"Newest backup was made {when} ({len(backups)} saved).")
 
 
@@ -217,10 +228,16 @@ def format_doctor_report(results: List[CheckResult]) -> str:
 
     lines.append("")
     if failures:
-        lines.append(f"{failures} problem(s) found, {warnings} warning(s), {passed} check(s) passed.")
+        lines.append(
+            f"{pluralize(failures, 'problem')} found, {pluralize(warnings, 'warning')}, "
+            f"{pluralize(passed, 'check')} passed."
+        )
     elif warnings:
-        lines.append(f"No problems, but {warnings} warning(s). {passed} check(s) passed.")
+        lines.append(
+            f"No problems, but {pluralize(warnings, 'warning')}. "
+            f"{pluralize(passed, 'check')} passed."
+        )
     else:
-        lines.append(f"All good. {passed} check(s) passed.")
+        lines.append(f"All good. {pluralize(passed, 'check')} passed.")
 
     return "\n".join(lines)

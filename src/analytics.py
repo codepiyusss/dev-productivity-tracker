@@ -3,6 +3,7 @@ from collections import Counter
 
 from src.dependencies import DependencyManager
 from src.streaks import StreakTracker
+from src.utils import pluralize
 
 
 class ProductivityAnalytics:
@@ -157,16 +158,23 @@ class ProductivityAnalytics:
 
         overdue = self.get_overdue_tasks(today)
         if overdue:
-            insights.append(f"{len(overdue)} task(s) are overdue.")
+            insights.append(
+                f"{pluralize(len(overdue), 'task')} "
+                f"{'is' if len(overdue) == 1 else 'are'} overdue."
+            )
 
         due_soon = self.get_due_soon_tasks(today=today)
         if due_soon:
-            insights.append(f"{len(due_soon)} task(s) are due in the next 7 days.")
+            insights.append(
+                f"{pluralize(len(due_soon), 'task')} "
+                f"{'is' if len(due_soon) == 1 else 'are'} due in the next 7 days."
+            )
 
         blocked = DependencyManager(self.database).get_blocked_tasks()
         if blocked:
             insights.append(
-                f"{len(blocked)} task(s) are blocked by unfinished tasks."
+                f"{pluralize(len(blocked), 'task')} "
+                f"{'is' if len(blocked) == 1 else 'are'} blocked by unfinished tasks."
             )
 
         streak = StreakTracker(self.database).current_streak(today)

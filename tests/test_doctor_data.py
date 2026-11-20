@@ -38,7 +38,7 @@ def test_unreadable_due_dates_are_reported_with_ids(path):
     result = by_name(check_data(path, NOW))["Due dates"]
 
     assert result.status == WARN
-    assert "1 task(s)" in result.detail and "IDs: 2" in result.detail
+    assert "1 task has an unreadable due date (ID: 2)" in result.detail
     assert "edit ID --due-date" in result.detail
 
 
@@ -47,7 +47,7 @@ def test_repeating_task_without_due_date_is_reported(path):
 
     result = by_name(check_data(path, NOW))["Repeating tasks"]
 
-    assert result.status == WARN and "1 repeating task(s)" in result.detail
+    assert result.status == WARN and "1 repeating task has no due date, so it cannot repeat" in result.detail
 
 
 def test_stale_timer_is_a_warning(path):
@@ -71,7 +71,7 @@ def test_legacy_completions_are_informational(path):
 
     result = by_name(check_data(path, NOW))["Completion times"]
 
-    assert result.status == INFO and "1 completed task(s)" in result.detail
+    assert result.status == INFO and "1 completed task has no completion time" in result.detail
 
 
 def test_old_database_without_newer_tables_is_handled(tmp_path):
