@@ -7,6 +7,7 @@ from src.database import Database
 from src.dependencies import DependencyManager
 from src.goals import GoalTracker
 from src.journal import ProductivityJournal
+from src.notes import NoteManager
 from src.tasks import TaskManager
 from src.timetracking import TimeTracker
 
@@ -20,6 +21,7 @@ def build(path):
     GoalTracker(database).set_goal("daily", 3)
     manager.create_task("C")
     DependencyManager(database).add(2, 1)
+    NoteManager(database).add(1, "a note")
     ProductivityJournal(path).add_entry(
         achievements="Did things", entry_date="2026-11-10"
     )
@@ -33,7 +35,7 @@ def test_describe_counts_every_table(tmp_path):
 
     assert info["counts"] == {
         "tasks": 3, "time_entries": 1, "goals": 1, "journal_entries": 1,
-        "task_dependencies": 1,
+        "task_dependencies": 1, "task_notes": 1,
     }
     assert info["size_bytes"] > 0
 
@@ -48,7 +50,7 @@ def test_missing_tables_count_as_zero(tmp_path):
 
     assert describe_database(path)["counts"] == {
         "tasks": 1, "time_entries": 0, "goals": 0, "journal_entries": 0,
-        "task_dependencies": 0,
+        "task_dependencies": 0, "task_notes": 0,
     }
 
 

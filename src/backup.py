@@ -106,6 +106,7 @@ COUNTED_TABLES = {
     "goals": ("goal", "goals"),
     "journal_entries": ("journal entry", "journal entries"),
     "task_dependencies": ("dependency", "dependencies"),
+    "task_notes": ("note", "notes"),
 }
 
 
