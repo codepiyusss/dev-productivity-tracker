@@ -26,7 +26,7 @@ def test_summary_text_sections(summary):
     text = format_time_summary(summary)
 
     assert text.splitlines()[0] == (
-        "Time tracked in the last 3 day(s): 2h (2 entries)"
+        "Time tracked in the last 3 days: 2h (2 entries)"
     )
     assert "  2026-11-08  -" in text
     assert "  2026-11-09  30m" in text
@@ -40,7 +40,7 @@ def test_empty_summary_is_a_single_line():
     summary = TimeTracker(database).get_summary(days=7, now=NOW)
 
     assert format_time_summary(summary) == (
-        "Time tracked in the last 7 day(s): 0s (0 entries)"
+        "Time tracked in the last 7 days: 0s (0 entries)"
     )
 
 
@@ -69,7 +69,7 @@ def test_cli_summary_text_and_json(tmp_path, capsys):
     capsys.readouterr()
 
     assert run("timer", "summary", "--days", "2") == 0
-    assert "Time tracked in the last 2 day(s): 1h (1 entry)" in capsys.readouterr().out
+    assert "Time tracked in the last 2 days: 1h (1 entry)" in capsys.readouterr().out
 
     run("timer", "summary", "--json")
     data = json.loads(capsys.readouterr().out)

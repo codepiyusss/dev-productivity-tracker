@@ -72,7 +72,7 @@ def test_cli_list_shows_entries_or_a_helpful_message(tmp_path, capsys):
 
     run("add", "Write docs")
     run("timer", "list")
-    assert "No time entries in the last 7 day(s)." in capsys.readouterr().out
+    assert "No time entries in the last 7 days." in capsys.readouterr().out
 
     run("timer", "log", "1", "30m")
     capsys.readouterr()

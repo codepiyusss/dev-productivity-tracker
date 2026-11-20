@@ -26,7 +26,7 @@ def test_keep_removes_older_backups_after_creating(setup, capsys):
 
     output = capsys.readouterr().out
     assert "Backup created:" in output
-    assert "Removed 2 old backup(s); keeping the newest 3." in output
+    assert "Removed 2 old backups; keeping the newest 3." in output
     backups = list_backups(folder)
     assert len(backups) == 3
     # The brand-new backup is the newest, so it is always kept.

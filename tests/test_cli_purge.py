@@ -33,7 +33,7 @@ def test_dry_run_lists_tasks_and_deletes_nothing(run, capsys):
     assert run("purge", "--older-than", "30", "--dry-run") == 0
 
     output = capsys.readouterr().out
-    assert "2 completed task(s) finished 30+ days ago would be deleted:" in output
+    assert "2 completed tasks finished 30+ days ago would be deleted:" in output
     assert "Ancient A (completed 2020-01-01)" in output
     assert "Dry run: nothing was deleted." in output
     assert len(titles(run)) == 4
@@ -46,7 +46,7 @@ def test_purge_with_yes_backs_up_then_deletes(run, capsys):
     assert run("purge", "--older-than", "30", "--yes") == 0
 
     output = capsys.readouterr().out
-    assert "Backup saved:" in output and "Deleted 2 task(s)." in output
+    assert "Backup saved:" in output and "Deleted 2 tasks." in output
     assert titles(run) == ["Legacy", "Recent"]
     backup = list_backups(run.folder)[0]
     assert backup["label"] == "before-purge" and backup["counts"]["tasks"] == 4
