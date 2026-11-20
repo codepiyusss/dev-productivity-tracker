@@ -636,7 +636,8 @@ def handle_edit(manager, args):
 
 
 def format_task_details(
-    task, tracked_seconds=0, timer_running=False, waits_for=None, needed_by=None
+    task, tracked_seconds=0, timer_running=False, waits_for=None, needed_by=None,
+    notes=None
 ):
     """Multi-line view of a single task."""
     if task.completed:
@@ -669,6 +670,11 @@ def format_task_details(
         tracked = format_duration(tracked_seconds)
         lines.insert(len(lines) - 1, f"  Time spent:  {tracked}" + (" (timer running)" if timer_running else ""))
 
+    if notes:
+        lines.append(f"  Notes ({len(notes)}):")
+        for note in notes:
+            lines.extend("  " + line for line in format_note(note).splitlines())
+
     return "\n".join(lines)
 
 
@@ -688,6 +694,7 @@ def handle_show(manager, args):
         timer_running=bool(running and running["task_id"] == task.task_id),
         waits_for=dependencies.get_blockers(task.task_id),
         needed_by=dependencies.get_dependents(task.task_id),
+        notes=NoteManager(manager.database).list(task.task_id),
     ))
     return 0
 
