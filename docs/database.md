@@ -87,3 +87,9 @@ before completion times were tracked have no date, so they are only included wit
 `--include-undated`. Deleting a task also deletes its tags, time entries and dependency
 links (`ON DELETE CASCADE`). A `before-purge` backup is saved first, so a purge can be
 undone with `backup restore`.
+
+## Task notes
+
+`task_notes` stores short timestamped notes (`note_id`, `task_id`, `text`, `created_at`).
+The text cannot be blank, and notes are deleted with their task (`ON DELETE CASCADE`).
+The table is created automatically on existing databases, and backups count and restore it.

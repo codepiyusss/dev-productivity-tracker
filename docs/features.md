@@ -20,3 +20,4 @@
 - Health check (`doctor`)
 - Search across tasks and the journal (`search`)
 - Housekeeping: purge old completed tasks (`purge`)
+- Notes on tasks (`note`)
