@@ -29,7 +29,7 @@ from src.timetracking import (
     STALE_AFTER_SECONDS, TimeTracker, format_time_summary
 )
 from src.utils import (
-    format_duration, parse_duration, parse_tag_string, validate_due_date
+    format_duration, parse_duration, parse_tag_string, pluralize, validate_due_date
 )
 from datetime import date, timedelta
 
@@ -503,7 +503,7 @@ def handle_export(manager, args):
         print(f"Could not export tasks: {error}")
         return
 
-    print(f"Exported {len(tasks)} task(s) to: {path}")
+    print(f"Exported {pluralize(len(tasks), 'task')} to: {path}")
 
 
 def handle_import(manager, args):
@@ -527,13 +527,13 @@ def handle_import(manager, args):
         return 1
 
     prefix = "[Dry run] Would import" if args.dry_run else "Imported"
-    print(f"{prefix} {result.imported} task(s).")
+    print(f"{prefix} {pluralize(result.imported, 'task')}.")
 
     if result.duplicates:
-        print(f"Skipped {result.duplicates} duplicate task(s).")
+        print(f"Skipped {pluralize(result.duplicates, 'duplicate task')}.")
 
     if result.failed:
-        print(f"Skipped {result.failed} invalid row(s):")
+        print(f"Skipped {pluralize(result.failed, 'invalid row')}:")
         for message in result.errors[:10]:
             print(f"  {message}")
         if len(result.errors) > 10:
@@ -546,7 +546,7 @@ def handle_goal(manager, args):
     try:
         if args.goal_command == "set":
             tracker.set_goal(args.period, args.target)
-            print(f"{args.period.title()} goal set to {args.target} task(s).")
+            print(f"{args.period.title()} goal set to {pluralize(args.target, 'task')}.")
 
         elif args.goal_command == "clear":
             removed = tracker.clear_goal(args.period)
@@ -768,16 +768,16 @@ def handle_purge(manager, args):
         return 0
 
     summary = describe_purge(database, tasks)
-    print(f"{len(tasks)} completed task(s) finished {args.older_than}+ days ago would be deleted:")
+    print(f"{pluralize(len(tasks), 'completed task')} finished {args.older_than}+ days ago would be deleted:")
     for task in tasks[:10]:
         when = task.completed_at[:10] if task.completed_at else "unknown date"
         print(f"  [{task.task_id}] {task.title} (completed {when})")
     if len(tasks) > 10:
         print(f"  ...and {len(tasks) - 10} more.")
     print(
-        f"This also removes {summary['time_entries']} time entr"
-        f"{'y' if summary['time_entries'] == 1 else 'ies'} and "
-        f"{summary['dependency_links']} dependency link(s)."
+        "This also removes "
+        f"{pluralize(summary['time_entries'], 'time entry', 'time entries')} and "
+        f"{pluralize(summary['dependency_links'], 'dependency link')}."
     )
 
     if args.dry_run:
@@ -797,7 +797,7 @@ def handle_purge(manager, args):
         print(f"Backup saved: {info['path']}")
 
     purge_tasks(database, tasks)
-    print(f"Deleted {len(tasks)} task(s).")
+    print(f"Deleted {pluralize(len(tasks), 'task')}.")
     return 0
 
 
@@ -898,7 +898,7 @@ def handle_backup(manager, args):
                 folder = Path(info["path"]).parent
                 removed = prune_backups(folder, args.keep)
                 if removed:
-                    print(f"Removed {len(removed)} old backup(s); keeping the newest {args.keep}.")
+                    print(f"Removed {pluralize(len(removed), 'old backup')}; keeping the newest {args.keep}.")
 
         elif args.backup_command == "list":
             folder = args.backup_dir or default_backup_dir(db_path)
@@ -949,7 +949,7 @@ def handle_backup(manager, args):
                 print(f"Nothing to delete. {args.keep} or fewer backups in {folder}.")
                 return 0
 
-            print(f"Would delete {len(doomed)} old backup(s), keeping the newest {args.keep}:")
+            print(f"Would delete {pluralize(len(doomed), 'old backup')}, keeping the newest {args.keep}:")
             for entry in doomed:
                 print(f"  {entry['name']}")
 
@@ -958,7 +958,7 @@ def handle_backup(manager, args):
                 return 0
 
             removed = prune_backups(folder, args.keep)
-            print(f"Deleted {len(removed)} backup(s). Safety copies are never deleted.")
+            print(f"Deleted {pluralize(len(removed), 'backup')}. Safety copies are never deleted.")
 
         elif args.backup_command == "verify":
             problems = verify_database(args.file)
@@ -1040,7 +1040,7 @@ def handle_timer(manager, args):
             entries = tracker.list_entries(args.task_id, args.days)
 
             if not entries:
-                print(f"No time entries in the last {args.days} day(s).")
+                print(f"No time entries in the last {pluralize(args.days, 'day')}.")
                 return 0
 
             for entry in entries:

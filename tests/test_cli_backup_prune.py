@@ -46,8 +46,8 @@ def test_prune_with_yes_deletes_the_oldest(tmp_path, capsys):
     assert run(db, "backup", "prune", "--keep", "2", "--yes") == 0
 
     output = capsys.readouterr().out
-    assert "Would delete 3 old backup(s), keeping the newest 2:" in output
-    assert "Deleted 3 backup(s)." in output
+    assert "Would delete 3 old backups, keeping the newest 2:" in output
+    assert "Deleted 3 backups." in output
     assert [b["created"].day for b in list_backups(folder)] == [5, 4]
 
 

@@ -31,7 +31,7 @@ def test_blocked_tasks_are_counted():
     dependencies.add(2, 1)
     dependencies.add(3, 1)
 
-    assert blocked_insights(database) == ["2 task(s) are blocked by unfinished tasks."]
+    assert blocked_insights(database) == ["2 tasks are blocked by unfinished tasks."]
 
 
 def test_insight_disappears_once_blockers_are_done():

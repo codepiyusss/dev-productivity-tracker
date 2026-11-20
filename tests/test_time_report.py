@@ -21,7 +21,7 @@ def test_report_includes_time_section():
     report = ProductivityReports(database).generate_text_report()
 
     assert "TIME TRACKING" in report
-    assert "Time tracked in the last 7 day(s): 1h 30m (1 entry)" in report
+    assert "Time tracked in the last 7 days: 1h 30m (1 entry)" in report
     assert "  work: 1h 30m" in report
     assert "  [1] Write docs: 1h 30m" in report
 

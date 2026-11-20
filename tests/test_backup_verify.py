@@ -57,7 +57,7 @@ def test_orphaned_rows_are_reported(tmp_path):
 
     problems = verify_database(path)
 
-    assert len(problems) == 1 and "point to records that no longer exist" in problems[0]
+    assert len(problems) == 1 and "1 row points to a record that no longer exists." in problems[0]
 
 
 def test_corrupted_pages_are_reported(tmp_path):

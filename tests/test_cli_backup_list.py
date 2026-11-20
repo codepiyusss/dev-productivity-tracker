@@ -60,7 +60,7 @@ def test_list_shows_backups_newest_first(run, capsys):
     assert lines[0].startswith("Backups in ")
     assert "2026-11-10 09:00:00" in lines[1] and "weekly" in lines[1]
     assert "2026-11-08 09:00:00" in lines[2]
-    assert "1 tasks" in lines[1]
+    assert "1 task" in lines[1]
 
 
 def test_list_a_custom_folder(run, capsys):
@@ -69,7 +69,7 @@ def test_list_a_custom_folder(run, capsys):
     capsys.readouterr()
 
     run("backup", "list", "--dir", str(other))
-    assert "1 tasks" in capsys.readouterr().out
+    assert "1 task" in capsys.readouterr().out
 
     run("backup", "list")
     assert "No backups found" in capsys.readouterr().out

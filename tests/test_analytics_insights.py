@@ -118,7 +118,7 @@ def test_recent_trend_is_oldest_first(analytics):
 def test_insights_mention_key_facts(analytics):
     text = " ".join(analytics.get_insights(TODAY))
 
-    assert "1 task(s) are overdue" in text
+    assert "1 task is overdue" in text
     assert "due in the next 7 days" in text
     assert "21 days" in text
     assert "Best completion rate" in text

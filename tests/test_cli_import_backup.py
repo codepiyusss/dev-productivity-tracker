@@ -28,7 +28,7 @@ def test_import_with_backup_saves_the_state_before_importing(setup, capsys):
 
     output = capsys.readouterr().out
     assert "Backup saved before import:" in output
-    assert "Imported 2 task(s)." in output
+    assert "Imported 2 tasks." in output
     assert titles(db) == ["Existing", "Imported A", "Imported B"]
 
     backup = list_backups(folder)[0]

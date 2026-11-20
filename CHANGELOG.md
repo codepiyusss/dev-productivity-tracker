@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Fix singular and plural wording across the CLI: messages now say "1 task", "1 time entry", "1 backup" and "1 task is overdue" instead of "1 tasks" or "task(s)". Adds a `pluralize` helper.
 - Add `purge --older-than DAYS` to delete old completed tasks. It shows a preview (`--dry-run` stops there), saves a `before-purge` backup, and asks before deleting; `--yes`, `--no-backup` and `--include-undated` adjust that. Time entries, tags and dependency links go with their tasks.
 - Add a GitHub Actions workflow that runs the tests on Linux and Windows (Python 3.12 and 3.13).
 - Remove the unused `matplotlib` dependency; tests now fail if a requirement is not actually used.

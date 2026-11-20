@@ -19,7 +19,7 @@ def test_format_report_lines_and_summary():
         "[WARN] Backups: none yet",
         "[INFO] Environment: Python 3",
         "",
-        "No problems, but 1 warning(s). 1 check(s) passed.",
+        "No problems, but 1 warning. 1 check passed.",
     ]
 
 
@@ -27,8 +27,8 @@ def test_format_report_with_failures_and_all_good():
     failing = format_doctor_report([CheckResult("Database file", "fail", "broken")])
     good = format_doctor_report([CheckResult("Database file", "ok", "fine")])
 
-    assert failing.endswith("1 problem(s) found, 0 warning(s), 0 check(s) passed.")
-    assert good.endswith("All good. 1 check(s) passed.")
+    assert failing.endswith("1 problem found, 0 warnings, 0 checks passed.")
+    assert good.endswith("All good. 1 check passed.")
 
 
 @pytest.fixture

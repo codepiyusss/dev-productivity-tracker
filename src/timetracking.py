@@ -227,11 +227,11 @@ def entry_seconds(entry: Dict, now: Optional[datetime] = None) -> int:
 
 def format_time_summary(summary: Dict, top_tasks: int = 5) -> str:
     """Readable text for a summary from `TimeTracker.get_summary`."""
-    from src.utils import format_duration
+    from src.utils import format_duration, pluralize
 
     entries = summary["entry_count"]
     lines = [
-        f"Time tracked in the last {summary['days']} day(s): "
+        f"Time tracked in the last {pluralize(summary['days'], 'day')}: "
         f"{format_duration(summary['total_seconds'])} "
         f"({entries} {'entry' if entries == 1 else 'entries'})"
     ]
