@@ -20,7 +20,12 @@ Streak: 1 day. Keep it going tomorrow!
 
 | Area | What you can do |
 |---|---|
+| **Review** | Look back over the last week: what you finished, time tracked, goals hit |
+| **Today** | One command that shows overdue and due tasks, your timer, goals and streak |
 | **Tasks** | Add, edit, show, complete, reopen and delete tasks with priority, category, description and due date |
+| **Recurring tasks** | Repeat a task daily, weekly or monthly; completing it creates the next one |
+| **Dependencies** | Make a task wait for others, and see what is ready to start |
+| **Notes** | Attach short timestamped notes to any task |
 | **Tags and search** | Give tasks several tags, then search, filter and sort your list |
 | **Reminders** | See overdue tasks and tasks due soon |
 | **Time tracking** | Start and stop a timer, log time by hand, and see totals by day, category and task |
@@ -28,6 +33,9 @@ Streak: 1 day. Keep it going tomorrow!
 | **Streaks** | Track how many days in a row you complete something |
 | **Analytics** | Completion rates by priority, category and tag, how long tasks have waited, and short insights |
 | **Journal** | Write a daily entry (achievements, challenges, next steps), then search it by text or date range |
+| **Search** | Find tasks and journal entries by any words, best matches first |
+| **Health check** | `doctor` checks your database and setup for problems |
+| **Backups** | Save, verify and restore snapshots of your whole database |
 | **Import and export** | Export tasks to CSV or JSON, and import tasks from CSV |
 
 Your data stays local. Existing databases are upgraded automatically when you update
@@ -64,6 +72,49 @@ Add `--help` after any command to see its options, for example
 Every example starts with `python -m src.main`. It is shortened to `tracker` below
 for readability.
 
+### Your day at a glance
+
+```bash
+tracker today
+```
+
+```text
+Today: 2026-11-10 (Tuesday)
+
+Overdue (1):
+  [3] Pay rent - due 2026-11-01
+
+Due today (1):
+  [5] Weekly report (high priority)
+
+Pending: 6 (5 ready to start, 1 blocked)
+
+Daily goal: [###-------] 1/3 (33.3%) - 2 to go
+
+Completed today: 1
+Streak: 2 days
+```
+
+### Looking back
+
+```bash
+tracker review                # the last 7 days
+tracker review --days 30
+```
+
+```text
+Review: 2026-11-04 to 2026-11-10 (7 days)
+
+Completed: 9 tasks (created: 12)
+Active days: 5 of 7
+Busiest day: 2026-11-10 (4 tasks)
+Activity: [-#-#####] (oldest to today)
+Time tracked: 11h 30m (work 8h, learning 3h 30m)
+Daily goal met on 4 of 7 days (target: 2 per day)
+Journal: written on 5 days
+Streak: 3 days
+```
+
 ### Tasks
 
 ```bash
@@ -81,6 +132,47 @@ tracker delete 2                              # asks first; add --yes to skip
 
 - Priorities are `low`, `medium` or `high`.
 - Due dates must be real `YYYY-MM-DD` dates. Tasks past their date show `(OVERDUE)`.
+
+### Recurring tasks
+
+```bash
+tracker add "Weekly report" --due-date 2026-11-20 --repeat weekly
+tracker complete 1                            # creates the next one, due 2026-11-27
+tracker edit 1 --repeat monthly
+tracker edit 1 --no-repeat
+```
+
+- Repeat rules are `daily`, `weekly` and `monthly`, and a repeating task needs a due date.
+- Completing a repeating task creates a new pending copy (same title, priority, category and tags)
+  with the next due date. If you finish late, the new due date is the next regular date after today,
+  so you do not get a pile of overdue copies.
+- Monthly repeats move to the end of short months (Jan 31 becomes Feb 28) and keep that day afterwards.
+
+### Dependencies
+
+```bash
+tracker depend add 3 2                        # task 3 cannot be finished before task 2
+tracker depend remove 3 2
+tracker depend list 3                         # what it waits for, and what waits for it
+tracker list --ready                          # pending tasks nothing is blocking
+tracker list --blocked                        # pending tasks waiting on unfinished tasks
+tracker complete 3 --force                    # finish a blocked task anyway
+```
+
+- A task can wait for several others. Circular chains (A waits for B, B waits for A) are rejected.
+- Only unfinished blockers hold a task up. Once they are completed the task is ready.
+- Blocked tasks are marked `BLOCKED by 2` in `list`, and completing a blocker tells you which tasks were freed up.
+
+### Notes
+
+```bash
+tracker note add 3 Remember to check the CLI examples
+tracker note list 3
+tracker note delete 7                         # asks first; add --yes to skip
+tracker show 3                                # notes appear at the bottom
+```
+
+Notes are timestamped, kept with the task, deleted with it, and included in backups.
 
 ### Tags
 
@@ -158,6 +250,7 @@ tracker journal add --achievements "Shipped time tracking" --challenges "Edge ca
 tracker journal list --limit 5
 tracker journal list --search tracking --from-date 2026-11-01 --to-date 2026-11-30
 tracker journal show 2026-11-08
+tracker journal export --format md --output my_journal.md   # also json or csv
 tracker journal update 2026-11-08 --achievements "Shipped and tested time tracking"
 tracker journal delete 2026-11-08
 ```
@@ -174,10 +267,58 @@ tracker import tasks.csv
 ```
 
 - Only a `title` column is required to import. Optional columns are `description`,
-  `priority`, `category`, `due_date`, `completed` (yes/no) and `tags` (separated by `;` or `,`).
+  `priority`, `category`, `due_date`, `completed` (yes/no), `recurrence` and `tags` (separated by `;` or `,`).
 - Files made by `export` can be imported again.
 - Invalid rows are skipped and reported by line number. Tasks that already exist
   (same title, category and due date) are skipped unless you pass `--allow-duplicates`.
+
+### Search
+
+```bash
+tracker search python docs            # all words must match
+tracker search login --tasks --limit 5
+tracker search "deploy" --journal
+```
+
+Searches task titles, tags, categories and descriptions, and journal entries. Title matches rank first,
+and journal results show a short snippet around the match.
+
+### Health check
+
+```bash
+tracker doctor
+```
+
+Checks that the database opens and passes integrity checks, that all tables exist, and looks for odd
+data (invalid due dates, repeating tasks without due dates, a forgotten timer), plus how old your
+newest backup is. It works even on a damaged database and exits with code 1 if it finds a real problem.
+
+### Cleaning up old tasks
+
+```bash
+tracker purge --older-than 90 --dry-run       # preview only
+tracker purge --older-than 90                 # backs up first, then asks before deleting
+```
+
+`purge` deletes completed tasks that were finished at least that many days ago, together with their time
+entries and links. A `before-purge` backup is saved first, so you can undo it with `backup restore`.
+
+### Backups
+
+```bash
+tracker backup create                         # saves to data/backups/
+tracker backup create --label before-upgrade --keep 10
+tracker backup list
+tracker backup verify data/backups/productivity-20261110-153005.db
+tracker backup restore data/backups/productivity-20261110-153005.db
+tracker backup prune --keep 5
+tracker import tasks.csv --backup             # saves a copy first, so you can undo an import
+```
+
+- Backups are consistent snapshots and are checked for problems before they are kept.
+- `restore` always saves your current data as a `pre-restore` backup first, then asks for confirmation
+  (use `--yes` to skip). Safety copies are never deleted by `prune`.
+- Backups contain all of your data, so keep them somewhere private.
 
 ## Where your data is stored
 
