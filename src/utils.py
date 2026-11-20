@@ -115,3 +115,14 @@ def parse_duration(text):
         raise ValueError("Duration cannot be longer than 24 hours.")
 
     return seconds
+
+
+def pluralize(count, singular, plural=None):
+    """'1 task' or '3 tasks': the number followed by the right form of the word.
+
+    `plural` defaults to the singular with an 's' added; pass it for irregular
+    words, e.g. pluralize(2, "entry", "entries").
+    """
+    word = singular if count == 1 else (plural or singular + "s")
+
+    return f"{count} {word}"
