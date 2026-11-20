@@ -2,9 +2,10 @@ from datetime import date, datetime, time, timedelta
 from typing import Dict, Iterable, List, Optional
 
 from src.analytics import ProductivityAnalytics
-from src.goals import GoalTracker
+from src.goals import GoalTracker, format_progress
 from src.streaks import StreakTracker
 from src.timetracking import TimeTracker
+from src.utils import format_duration, pluralize
 
 
 def _date_of(value: Optional[str]) -> Optional[date]:
@@ -94,3 +95,62 @@ def build_review(
         "overdue_count": len(ProductivityAnalytics(database).get_overdue_tasks(today)),
         "streak": StreakTracker(database).current_streak(today)["length"],
     }
+
+
+MAX_LISTED = 10
+
+
+def format_review(review: Dict) -> str:
+    """Readable text for a review from `build_review`."""
+    days = review["days"]
+    lines = [
+        f"Review: {review['first_day'].isoformat()} to {review['last_day'].isoformat()} "
+        f"({pluralize(days, 'day')})",
+        "",
+        f"Completed: {pluralize(review['completed_count'], 'task')} "
+        f"(created: {review['created_count']})",
+        f"Active days: {review['active_days']} of {days}",
+    ]
+
+    busiest = review["busiest_day"]
+    if busiest:
+        lines.append(
+            f"Busiest day: {busiest['date']} ({pluralize(busiest['completed'], 'task')})"
+        )
+
+    strip = "".join("#" if day["completed"] else "-" for day in review["per_day"])
+    lines.append(f"Activity: [{strip}] (oldest to today)")
+
+    time_info = review["time"]
+    if time_info["total_seconds"]:
+        categories = ", ".join(
+            f"{item['category']} {format_duration(item['seconds'])}"
+            for item in time_info["by_category"]
+        )
+        lines.append(f"Time tracked: {format_duration(time_info['total_seconds'])} ({categories})")
+    else:
+        lines.append("Time tracked: none")
+
+    goal = review["daily_goal"]
+    if goal:
+        lines.append(
+            f"Daily goal met on {goal['days_met']} of {days} days (target: {goal['target']} per day)"
+        )
+    if review["weekly_goal"]:
+        lines.append(format_progress(review["weekly_goal"]))
+
+    lines.append(f"Journal: written on {pluralize(review['journal_entries'], 'day')}")
+    if review["streak"]:
+        lines.append(f"Streak: {pluralize(review['streak'], 'day')}")
+    if review["overdue_count"]:
+        lines.append(f"Overdue now: {pluralize(review['overdue_count'], 'task')}")
+
+    finished = review["completed_tasks"]
+    if finished:
+        lines += ["", "Finished:"]
+        for task in finished[:MAX_LISTED]:
+            lines.append(f"  [{task.task_id}] {task.title} ({task.completed_at[:10]})")
+        if len(finished) > MAX_LISTED:
+            lines.append(f"  ...and {len(finished) - MAX_LISTED} more.")
+
+    return "\n".join(lines)
