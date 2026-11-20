@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from src.utils import pluralize
+
 PREFIX = "productivity-"
 EXTENSION = ".db"
 TIME_FORMAT = "%Y%m%d-%H%M%S"
@@ -99,11 +101,11 @@ def copy_database(source_path, dest_path) -> str:
 
 
 COUNTED_TABLES = {
-    "tasks": "tasks",
-    "time_entries": "time entries",
-    "goals": "goals",
-    "journal_entries": "journal entries",
-    "task_dependencies": "dependencies",
+    "tasks": ("task", "tasks"),
+    "time_entries": ("time entry", "time entries"),
+    "goals": ("goal", "goals"),
+    "journal_entries": ("journal entry", "journal entries"),
+    "task_dependencies": ("dependency", "dependencies"),
 }
 
 
@@ -151,10 +153,10 @@ def describe_database(path) -> dict:
 
 
 def format_counts(counts: dict) -> str:
-    """'12 tasks, 3 time entries, 1 goals, 5 journal entries' (zeros omitted)."""
+    """'12 tasks, 3 time entries, 1 goal, 5 journal entries' (zeros omitted)."""
     parts = [
-        f"{counts[table]} {label}"
-        for table, label in COUNTED_TABLES.items()
+        pluralize(counts[table], singular, plural)
+        for table, (singular, plural) in COUNTED_TABLES.items()
         if counts.get(table)
     ]
 

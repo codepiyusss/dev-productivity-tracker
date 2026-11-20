@@ -28,9 +28,9 @@ def test_restore_with_yes_replaces_the_data(run, capsys):
     assert run("backup", "restore", str(run.backup), "--yes") == 0
 
     output = capsys.readouterr().out
-    assert "Backup:  1 tasks" in output
+    assert "Backup:  1 task" in output
     assert "Current: 2 tasks" in output
-    assert "Restored: 1 tasks" in output
+    assert "Restored: 1 task" in output
     assert "Previous data saved to:" in output
     assert titles(run.db) == ["Original"]
 
@@ -90,5 +90,5 @@ def test_restore_onto_a_fresh_machine(run, tmp_path, capsys):
     output = capsys.readouterr().out
     assert code == 0
     assert "Current: empty" in output   # the tool had just created an empty database
-    assert "Restored: 1 tasks" in output
+    assert "Restored: 1 task" in output
     assert titles(other) == ["Original"]

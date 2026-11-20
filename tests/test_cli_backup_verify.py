@@ -22,7 +22,7 @@ def test_verify_accepts_a_healthy_backup(run, capsys):
 
     output = capsys.readouterr().out
     assert output.startswith("OK: ")
-    assert "Contents: 1 tasks" in output
+    assert "Contents: 1 task" in output
 
 
 def test_verify_rejects_a_damaged_file(run, capsys):
