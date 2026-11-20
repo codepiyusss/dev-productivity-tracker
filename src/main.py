@@ -19,6 +19,7 @@ from src.reports import ProductivityReports
 from src.streaks import StreakTracker, format_streak_summary
 from src.task_filters import filter_tasks
 from src.journal import ProductivityJournal
+from src.journal_export import SUPPORTED_FORMATS as JOURNAL_FORMATS, export_journal
 from src.exporter import export_tasks
 from src.goals import PERIODS, GoalTracker, format_progress
 from src.housekeeping import describe_purge, find_purgeable, purge_tasks
@@ -453,6 +454,16 @@ def build_parser():
 
     journal_delete = journal_commands.add_parser("delete", help="Delete journal entry")
     journal_delete.add_argument("entry_date", type=valid_date)
+
+    journal_export = journal_commands.add_parser(
+        "export", help="Export journal entries to Markdown, JSON or CSV"
+    )
+    journal_export.add_argument("--format", choices=JOURNAL_FORMATS, default="md")
+    journal_export.add_argument(
+        "--output", help="Output file (default: journal_export.<format>)"
+    )
+    journal_export.add_argument("--from-date", type=valid_date, help="First day to include")
+    journal_export.add_argument("--to-date", type=valid_date, help="Last day to include")
     reminders = commands.add_parser(
         "reminders",
         help="Show overdue tasks and upcoming due dates"
@@ -1266,6 +1277,21 @@ def handle_journal(args):
         deleted = journal.delete_entry(args.entry_date)
         print("Journal entry deleted." if deleted else "Journal entry not found.")
 
+    elif args.journal_command == "export":
+        if args.from_date and args.to_date and args.from_date > args.to_date:
+            print("The start date must not be after the end date.")
+            return 1
+
+        entries = journal.get_all_entries(
+            start_date=args.from_date or None, end_date=args.to_date or None
+        )
+        output = args.output or f"journal_export.{args.format}"
+        path = export_journal(entries, output, args.format)
+        count = pluralize(len(entries), "entry", "entries")
+        print(f"Exported {count} to: {path}")
+
+    return 0
+
 def show_reminders(manager, days=7):
     if days < 0:
         print("Days cannot be negative.")
@@ -1328,8 +1354,7 @@ def _run(argv=None):
     args = parser.parse_args(argv)
 
     if args.command == "journal":
-        handle_journal(args)
-        return
+        return handle_journal(args)
 
     if args.command == "doctor":
         # Runs before the database is opened, so it can examine a damaged
