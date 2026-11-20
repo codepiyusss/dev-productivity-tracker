@@ -24,6 +24,7 @@ from src.goals import PERIODS, GoalTracker, format_progress
 from src.housekeeping import describe_purge, find_purgeable, purge_tasks
 from src.importer import import_tasks_csv
 from src.today import build_today_summary, format_today
+from src.notes import NoteManager
 from src.search import search_journal, search_tasks
 from src.timetracking import (
     STALE_AFTER_SECONDS, TimeTracker, format_time_summary
@@ -355,6 +356,20 @@ def build_parser():
         "--no-backup", action="store_true", help="Skip the automatic backup"
     )
     purge.add_argument("-y", "--yes", action="store_true", help="Delete without asking")
+
+    note = commands.add_parser("note", help="Attach notes to tasks")
+    note_commands = note.add_subparsers(dest="note_command", required=True)
+
+    note_add = note_commands.add_parser("add", help="Add a note to a task")
+    note_add.add_argument("task_id", type=positive_int)
+    note_add.add_argument("text", nargs="+", help="The note (quotes are optional)")
+
+    note_list = note_commands.add_parser("list", help="Show a task's notes")
+    note_list.add_argument("task_id", type=positive_int)
+
+    note_delete = note_commands.add_parser("delete", help="Delete a note by its number")
+    note_delete.add_argument("note_id", type=positive_int)
+    note_delete.add_argument("-y", "--yes", action="store_true", help="Delete without asking")
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
     stats.add_argument(
@@ -755,6 +770,62 @@ def format_dependencies(task, blockers, dependents):
         lines.extend(line(other) for other in dependents)
 
     return "\n".join(lines)
+
+
+def format_note(note):
+    """'  #3 2026-11-10 09:30  text', with later lines indented to match."""
+    stamp = note["created_at"][:16].replace("T", " ")
+    first, *rest = note["text"].splitlines() or [""]
+    prefix = f"  #{note['note_id']} {stamp}  "
+    lines = [prefix + first]
+    lines.extend(" " * len(prefix) + line for line in rest)
+
+    return "\n".join(lines)
+
+
+def handle_note(manager, args):
+    notes = NoteManager(manager.database)
+
+    try:
+        if args.note_command == "add":
+            note = notes.add(args.task_id, " ".join(args.text))
+            task = manager.get_task(args.task_id)
+            print(f"Note #{note['note_id']} added to task {task.task_id}: {task.title}")
+
+        elif args.note_command == "list":
+            task = manager.get_task(args.task_id)
+
+            if task is None:
+                print("Task not found.")
+                return 1
+
+            found = notes.list(args.task_id)
+            if not found:
+                print(f"Task {task.task_id} ({task.title}) has no notes.")
+                return 0
+
+            print(f"Notes for task {task.task_id}: {task.title}")
+            for note in found:
+                print(format_note(note))
+
+        elif args.note_command == "delete":
+            note = manager.database.get_note(args.note_id)
+
+            if note is None:
+                print(f"Note {args.note_id} not found.")
+                return 1
+
+            if not args.yes and not confirm(f"Delete note #{note['note_id']}?"):
+                print("Cancelled. Nothing was deleted.")
+                return 0
+
+            notes.delete(args.note_id)
+            print(f"Note #{args.note_id} deleted.")
+    except ValueError as error:
+        print(error)
+        return 1
+
+    return 0
 
 
 def handle_purge(manager, args):
@@ -1306,6 +1377,9 @@ def _run(argv=None):
 
     if args.command == "purge":
         return handle_purge(manager, args)
+
+    if args.command == "note":
+        return handle_note(manager, args)
 
     if args.command == "show":
         return handle_show(manager, args)
