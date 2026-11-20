@@ -117,6 +117,21 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_dependencies_depends_on "
                 "ON task_dependencies (depends_on)"
             )
+            # Migration: notes attached to tasks. Notes are deleted with their task.
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS task_notes (
+                    note_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id INTEGER NOT NULL,
+                    text TEXT NOT NULL CHECK (length(trim(text)) > 0),
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (task_id) REFERENCES tasks (task_id)
+                        ON DELETE CASCADE
+                )
+            """)
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_task_notes_task "
+                "ON task_notes (task_id)"
+            )
             # Migration: productivity goals (one target per period).
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS goals (
@@ -348,6 +363,48 @@ class Database:
                 "ORDER BY task_id, depends_on"
             ).fetchall()
         return [(row["task_id"], row["depends_on"]) for row in rows]
+
+    def add_note(self, task_id: int, text: str, created_at: str) -> Dict:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "INSERT INTO task_notes (task_id, text, created_at) VALUES (?, ?, ?)",
+                (task_id, text, created_at)
+            )
+        return {
+            "note_id": cursor.lastrowid, "task_id": task_id,
+            "text": text, "created_at": created_at,
+        }
+
+    def get_notes(self, task_id: int) -> List[Dict]:
+        """Notes for one task, oldest first."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM task_notes WHERE task_id = ? "
+                "ORDER BY created_at, note_id", (task_id,)
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_note(self, note_id: int) -> Optional[Dict]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM task_notes WHERE note_id = ?", (note_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def delete_note(self, note_id: int) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM task_notes WHERE note_id = ?", (note_id,)
+            )
+        return cursor.rowcount > 0
+
+    def get_note_counts(self) -> Dict[int, int]:
+        """{task_id: number_of_notes} for tasks that have notes."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT task_id, COUNT(*) AS total FROM task_notes GROUP BY task_id"
+            ).fetchall()
+        return {row["task_id"]: row["total"] for row in rows}
 
     def get_tag_counts(self) -> Dict[str, int]:
         """Return {tag: number_of_tasks}, sorted by tag name."""
