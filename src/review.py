@@ -1,7 +1,10 @@
-from datetime import date, datetime, timedelta
-from typing import Dict, List, Optional
+from datetime import date, datetime, time, timedelta
+from typing import Dict, Iterable, List, Optional
 
+from src.analytics import ProductivityAnalytics
+from src.goals import GoalTracker
 from src.streaks import StreakTracker
+from src.timetracking import TimeTracker
 
 
 def _date_of(value: Optional[str]) -> Optional[date]:
@@ -14,7 +17,9 @@ def _date_of(value: Optional[str]) -> Optional[date]:
 def build_review(
     database,
     days: int = 7,
-    today: Optional[date] = None
+    today: Optional[date] = None,
+    now: Optional[datetime] = None,
+    journal_entries: Optional[Iterable[Dict]] = None
 ) -> Dict:
     """A look back at the last `days` days, ending today.
 
@@ -51,6 +56,19 @@ def build_review(
     ]
     busiest = max(per_day, key=lambda day: (day["completed"], day["date"]))
 
+    if now is None:
+        now = (
+            datetime.now() if today == date.today()
+            else datetime.combine(today, time(23, 59, 59))
+        )
+
+    time_summary = TimeTracker(database).get_summary(days, now)
+    daily_target = database.get_goal("daily")
+    journal_days = {
+        entry["entry_date"] for entry in (journal_entries or [])
+        if first_day.isoformat() <= entry["entry_date"] <= today.isoformat()
+    }
+
     return {
         "days": days,
         "first_day": first_day,
@@ -61,4 +79,18 @@ def build_review(
         "per_day": per_day,
         "active_days": sum(1 for day in per_day if day["completed"]),
         "busiest_day": busiest if busiest["completed"] else None,
+        "time": {
+            "total_seconds": time_summary["total_seconds"],
+            "by_category": time_summary["by_category"][:3],
+            "by_task": time_summary["by_task"][:3],
+        },
+        "daily_goal": (
+            {"target": daily_target,
+             "days_met": sum(1 for day in per_day if day["completed"] >= daily_target)}
+            if daily_target else None
+        ),
+        "weekly_goal": GoalTracker(database).get_progress("weekly", today),
+        "journal_entries": len(journal_days),
+        "overdue_count": len(ProductivityAnalytics(database).get_overdue_tasks(today)),
+        "streak": StreakTracker(database).current_streak(today)["length"],
     }
