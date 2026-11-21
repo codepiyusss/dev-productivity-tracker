@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Add `journal export` to save journal entries as Markdown, JSON or CSV, optionally limited with `--from-date` and `--to-date`.
+- `journal` commands now return exit code 1 when they fail.
 - Add task notes: `note add TASK TEXT`, `note list TASK` and `note delete NOTE_ID`. Notes are timestamped, shown in `show`, deleted with their task, and included in backups.
 - Fix singular and plural wording across the CLI: messages now say "1 task", "1 time entry", "1 backup" and "1 task is overdue" instead of "1 tasks" or "task(s)". Adds a `pluralize` helper.
 - Add `purge --older-than DAYS` to delete old completed tasks. It shows a preview (`--dry-run` stops there), saves a `before-purge` backup, and asks before deleting; `--yes`, `--no-backup` and `--include-undated` adjust that. Time entries, tags and dependency links go with their tasks.

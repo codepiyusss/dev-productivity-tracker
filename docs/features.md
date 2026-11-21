@@ -21,3 +21,4 @@
 - Search across tasks and the journal (`search`)
 - Housekeeping: purge old completed tasks (`purge`)
 - Notes on tasks (`note`)
+- Journal export to Markdown, JSON and CSV
