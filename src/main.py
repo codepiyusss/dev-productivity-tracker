@@ -26,6 +26,7 @@ from src.housekeeping import describe_purge, find_purgeable, purge_tasks
 from src.importer import import_tasks_csv
 from src.today import build_today_summary, format_today
 from src.notes import NoteManager
+from src.review import build_review, format_review
 from src.search import search_journal, search_tasks
 from src.timetracking import (
     STALE_AFTER_SECONDS, TimeTracker, format_time_summary
@@ -371,6 +372,14 @@ def build_parser():
     note_delete = note_commands.add_parser("delete", help="Delete a note by its number")
     note_delete.add_argument("note_id", type=positive_int)
     note_delete.add_argument("-y", "--yes", action="store_true", help="Delete without asking")
+
+    review = commands.add_parser(
+        "review", help="Look back over the last few days (default: 7)"
+    )
+    review.add_argument(
+        "--days", type=positive_int, default=7,
+        help="How many days to cover, ending today (default: 7)"
+    )
 
     stats = commands.add_parser("stats", help="Show productivity statistics")
     stats.add_argument(
@@ -1412,6 +1421,16 @@ def _run(argv=None):
 
     if args.command == "note":
         return handle_note(manager, args)
+
+    if args.command == "review":
+        first_day = date.today() - timedelta(days=args.days - 1)
+        entries = ProductivityJournal(manager.database.db_path).get_all_entries(
+            start_date=first_day.isoformat(), end_date=date.today().isoformat()
+        )
+        print(format_review(
+            build_review(manager.database, args.days, journal_entries=entries)
+        ))
+        return 0
 
     if args.command == "show":
         return handle_show(manager, args)
