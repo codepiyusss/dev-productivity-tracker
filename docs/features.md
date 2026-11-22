@@ -22,3 +22,4 @@
 - Housekeeping: purge old completed tasks (`purge`)
 - Notes on tasks (`note`)
 - Journal export to Markdown, JSON and CSV
+- Weekly review (`review`)

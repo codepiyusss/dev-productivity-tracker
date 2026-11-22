@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Add `review` command: a look back over the last N days (default 7) with completed and created tasks, active days, busiest day, time tracked, daily and weekly goal results, journal days, streak, overdue tasks and the list of finished tasks.
 - Add `journal export` to save journal entries as Markdown, JSON or CSV, optionally limited with `--from-date` and `--to-date`.
 - `journal` commands now return exit code 1 when they fail.
 - Add task notes: `note add TASK TEXT`, `note list TASK` and `note delete NOTE_ID`. Notes are timestamped, shown in `show`, deleted with their task, and included in backups.
