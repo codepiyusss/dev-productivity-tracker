@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 from src.database import Database
 from src.models.task import Task
 from src.recurrence import next_due_date, validate_rule
-from src.utils import validate_due_date
+from src.utils import normalize_tag, validate_due_date
 
 PRIORITIES = {"low", "medium", "high"}
 
@@ -142,6 +142,48 @@ class TaskManager:
 
         self.database.update_task(task)
         return task
+
+    def rename_tag(self, old: str, new: str) -> int:
+        """Rename a tag everywhere. Returns how many tasks were changed.
+
+        Refuses if the new name is already in use; use `merge_tags` for that.
+        """
+        old, new = normalize_tag(old), normalize_tag(new)
+        counts = self.database.get_tag_counts()
+
+        if old == new:
+            raise ValueError("The new name is the same as the old one.")
+
+        if old not in counts:
+            raise ValueError(f"Tag '{old}' not found.")
+
+        if new in counts:
+            raise ValueError(
+                f"Tag '{new}' already exists. Use merge to combine them."
+            )
+
+        return self.database.merge_tags(old, new)
+
+    def merge_tags(self, source: str, target: str) -> int:
+        """Move all tasks from `source` to `target` and remove `source`."""
+        source, target = normalize_tag(source), normalize_tag(target)
+
+        if source == target:
+            raise ValueError("Choose two different tags to merge.")
+
+        if source not in self.database.get_tag_counts():
+            raise ValueError(f"Tag '{source}' not found.")
+
+        return self.database.merge_tags(source, target)
+
+    def delete_tag(self, tag: str) -> int:
+        """Remove a tag from every task. Returns how many tasks had it."""
+        tag = normalize_tag(tag)
+
+        if tag not in self.database.get_tag_counts():
+            raise ValueError(f"Tag '{tag}' not found.")
+
+        return self.database.delete_tag(tag)
 
     def get_all_tags(self) -> dict:
         """Return every tag in use with its task count."""
