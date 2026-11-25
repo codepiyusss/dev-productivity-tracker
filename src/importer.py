@@ -65,6 +65,73 @@ def _duplicate_key(title: str, category: str, due_date) -> tuple:
     return (title.strip().casefold(), category.strip().casefold(), due_date or "")
 
 
+def _import_rows(
+    rows,
+    manager: TaskManager,
+    dry_run: bool = False,
+    allow_duplicates: bool = False
+) -> ImportResult:
+    """Validate and import rows of already-stringified values.
+
+    `rows` yields (label, values) pairs, where label names the row in error
+    messages (for example "Line 4") and values maps column names to text.
+    Bad rows are reported and skipped, never aborting the rest.
+    """
+    result = ImportResult()
+    seen = set()
+
+    if not allow_duplicates:
+        seen = {
+            _duplicate_key(t.title, t.category, t.due_date)
+            for t in manager.get_all_tasks()
+        }
+
+    for label, values in rows:
+        try:
+            title = values.get("title", "")
+            if not title:
+                raise ValueError("title is empty")
+
+            due_date = _parse_due_date(values.get("due_date", ""))
+            completed = _parse_completed(values.get("completed", ""))
+            tags = _parse_tags(values.get("tags", ""))
+            recurrence = validate_rule(values.get("recurrence", ""))
+            if recurrence and not due_date:
+                raise ValueError("repeating task needs a due date")
+            category = values.get("category") or "general"
+            priority = (values.get("priority") or "medium").casefold()
+
+            key = _duplicate_key(title, category, due_date)
+            if not allow_duplicates and key in seen:
+                result.duplicates += 1
+                continue
+
+            if dry_run:
+                # Validate exactly like a real import, without saving.
+                Task(title=title, priority=priority, tags=tags)
+            else:
+                task = manager.create_task(
+                    title=title,
+                    description=values.get("description", ""),
+                    priority=priority,
+                    category=category,
+                    due_date=due_date,
+                    tags=tags,
+                    recurrence=recurrence
+                )
+                if completed:
+                    manager.complete_task(task.task_id)
+
+            seen.add(key)
+            result.imported += 1
+
+        except ValueError as error:
+            result.failed += 1
+            result.errors.append(f"{label}: {error}")
+
+    return result
+
+
 def import_tasks_csv(
     csv_path: str,
     manager: TaskManager,
@@ -84,8 +151,6 @@ def import_tasks_csv(
     if not path.is_file():
         raise ValueError(f"File not found: {csv_path}")
 
-    result = ImportResult()
-
     with open(path, encoding="utf-8-sig", newline="") as file:
         reader = csv.DictReader(file)
 
@@ -97,61 +162,16 @@ def import_tasks_csv(
         if "title" not in reader.fieldnames:
             raise ValueError("CSV must contain a 'title' column.")
 
-        seen = set()
-        if not allow_duplicates:
-            seen = {
-                _duplicate_key(t.title, t.category, t.due_date)
-                for t in manager.get_all_tasks()
-            }
+        rows = (
+            (
+                f"Line {reader.line_num}",
+                {
+                    key: (value or "").strip()
+                    for key, value in row.items()
+                    if key in KNOWN_COLUMNS
+                },
+            )
+            for row in reader
+        )
 
-        for row in reader:
-            line = reader.line_num
-            values = {
-                key: (value or "").strip()
-                for key, value in row.items()
-                if key in KNOWN_COLUMNS
-            }
-
-            try:
-                title = values.get("title", "")
-                if not title:
-                    raise ValueError("title is empty")
-
-                due_date = _parse_due_date(values.get("due_date", ""))
-                completed = _parse_completed(values.get("completed", ""))
-                tags = _parse_tags(values.get("tags", ""))
-                recurrence = validate_rule(values.get("recurrence", ""))
-                if recurrence and not due_date:
-                    raise ValueError("repeating task needs a due date")
-                category = values.get("category") or "general"
-                priority = (values.get("priority") or "medium").casefold()
-
-                key = _duplicate_key(title, category, due_date)
-                if not allow_duplicates and key in seen:
-                    result.duplicates += 1
-                    continue
-
-                if dry_run:
-                    # Validate exactly like a real import, without saving.
-                    Task(title=title, priority=priority, tags=tags)
-                else:
-                    task = manager.create_task(
-                        title=title,
-                        description=values.get("description", ""),
-                        priority=priority,
-                        category=category,
-                        due_date=due_date,
-                        tags=tags,
-                        recurrence=recurrence
-                    )
-                    if completed:
-                        manager.complete_task(task.task_id)
-
-                seen.add(key)
-                result.imported += 1
-
-            except ValueError as error:
-                result.failed += 1
-                result.errors.append(f"Line {line}: {error}")
-
-    return result
+        return _import_rows(rows, manager, dry_run, allow_duplicates)
