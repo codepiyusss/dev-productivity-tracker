@@ -23,3 +23,4 @@
 - Notes on tasks (`note`)
 - Journal export to Markdown, JSON and CSV
 - Weekly review (`review`)
+- Due date filters for task lists
