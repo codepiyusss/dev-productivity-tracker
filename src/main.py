@@ -17,7 +17,7 @@ from src.analytics import ProductivityAnalytics
 from src.recurrence import RULES
 from src.reports import ProductivityReports
 from src.streaks import StreakTracker, format_streak_summary
-from src.task_filters import filter_tasks
+from src.task_filters import filter_by_due, filter_tasks
 from src.journal import ProductivityJournal
 from src.journal_export import SUPPORTED_FORMATS as JOURNAL_FORMATS, export_journal
 from src.exporter import export_tasks
@@ -137,6 +137,20 @@ def build_parser():
     readiness.add_argument(
         "--blocked", action="store_true",
         help="Only pending tasks waiting on unfinished tasks"
+    )
+    due_filter = list_parser.add_mutually_exclusive_group()
+    due_filter.add_argument(
+        "--overdue", action="store_true", help="Only pending tasks past their due date"
+    )
+    due_filter.add_argument(
+        "--due-today", action="store_true", help="Only pending tasks due today"
+    )
+    due_filter.add_argument(
+        "--due-within", type=non_negative_int, metavar="DAYS",
+        help="Only pending tasks due from today up to DAYS days ahead"
+    )
+    due_filter.add_argument(
+        "--no-due-date", action="store_true", help="Only pending tasks with no due date"
     )
     list_parser.add_argument(
         "--sort",
@@ -1472,6 +1486,15 @@ def _run(argv=None):
         except ValueError as error:
             print(error)
             return
+
+        if args.overdue:
+            tasks = filter_by_due(tasks, "overdue")
+        elif args.due_today:
+            tasks = filter_by_due(tasks, "today")
+        elif args.due_within is not None:
+            tasks = filter_by_due(tasks, "within", days=args.due_within)
+        elif args.no_due_date:
+            tasks = filter_by_due(tasks, "none")
 
         if args.ready or args.blocked:
             blocked_ids = set(DependencyManager(manager.database).get_blocker_map())
