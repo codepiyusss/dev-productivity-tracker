@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- `import` now accepts JSON files as well as CSV (guessed from `.json`, or use `--format`). A file made by `export --format json` imports back with its tags and repeat rules; bad items are reported by number.
 - Add tag management: `tag rename OLD NEW`, `tag merge SOURCE TARGET` and `tag delete TAG`. Rename refuses to clobber an existing tag (use merge); delete asks first.
 - `tag` commands now return exit code 1 when they fail.
 - Add due date filters to `list`: `--overdue`, `--due-today`, `--due-within DAYS` and `--no-due-date`. They only show pending tasks and combine with the other filters.
