@@ -23,7 +23,7 @@ from src.journal_export import SUPPORTED_FORMATS as JOURNAL_FORMATS, export_jour
 from src.exporter import export_tasks
 from src.goals import PERIODS, GoalTracker, format_progress
 from src.housekeeping import describe_purge, find_purgeable, purge_tasks
-from src.importer import import_tasks_csv
+from src.importer import import_tasks_csv, import_tasks_json
 from src.today import build_today_summary, format_today
 from src.notes import NoteManager
 from src.review import build_review, format_review
@@ -172,8 +172,14 @@ def build_parser():
         help="Add a time_spent_seconds column from the time tracker"
     )
 
-    import_parser = commands.add_parser("import", help="Import tasks from a CSV file")
-    import_parser.add_argument("csv_file")
+    import_parser = commands.add_parser(
+        "import", help="Import tasks from a CSV or JSON file"
+    )
+    import_parser.add_argument("csv_file", metavar="file", help="A .csv or .json file")
+    import_parser.add_argument(
+        "--format", choices=["csv", "json"],
+        help="File format (default: guessed from the file name; .json means JSON)"
+    )
     import_parser.add_argument(
         "--dry-run", action="store_true",
         help="Validate the file and show results without saving anything"
@@ -570,6 +576,14 @@ def handle_export(manager, args):
     print(f"Exported {pluralize(len(tasks), 'task')} to: {path}")
 
 
+def detect_import_format(path, explicit=None):
+    """'json' for .json files (or when asked), otherwise 'csv'."""
+    if explicit:
+        return explicit
+
+    return "json" if str(path).casefold().endswith(".json") else "csv"
+
+
 def handle_import(manager, args):
     if args.backup and not args.dry_run:
         try:
@@ -580,7 +594,12 @@ def handle_import(manager, args):
         print(f"Backup saved before import: {info['path']}")
 
     try:
-        result = import_tasks_csv(
+        importer = (
+            import_tasks_json
+            if detect_import_format(args.csv_file, args.format) == "json"
+            else import_tasks_csv
+        )
+        result = importer(
             args.csv_file,
             manager,
             dry_run=args.dry_run,

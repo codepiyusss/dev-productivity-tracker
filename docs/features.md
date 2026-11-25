@@ -25,3 +25,4 @@
 - Weekly review (`review`)
 - Due date filters for task lists
 - Tag management: rename, merge and delete
+- JSON task import (round-trips with JSON export)
