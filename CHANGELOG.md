@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Add tag management: `tag rename OLD NEW`, `tag merge SOURCE TARGET` and `tag delete TAG`. Rename refuses to clobber an existing tag (use merge); delete asks first.
+- `tag` commands now return exit code 1 when they fail.
+- Add due date filters to `list`: `--overdue`, `--due-today`, `--due-within DAYS` and `--no-due-date`. They only show pending tasks and combine with the other filters.
 - Add `review` command: a look back over the last N days (default 7) with completed and created tasks, active days, busiest day, time tracked, daily and weekly goal results, journal days, streak, overdue tasks and the list of finished tasks.
 - Add `journal export` to save journal entries as Markdown, JSON or CSV, optionally limited with `--from-date` and `--to-date`.
 - `journal` commands now return exit code 1 when they fail.

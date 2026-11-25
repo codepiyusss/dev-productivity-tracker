@@ -17,7 +17,7 @@ from src.analytics import ProductivityAnalytics
 from src.recurrence import RULES
 from src.reports import ProductivityReports
 from src.streaks import StreakTracker, format_streak_summary
-from src.task_filters import filter_tasks
+from src.task_filters import filter_by_due, filter_tasks
 from src.journal import ProductivityJournal
 from src.journal_export import SUPPORTED_FORMATS as JOURNAL_FORMATS, export_journal
 from src.exporter import export_tasks
@@ -32,7 +32,8 @@ from src.timetracking import (
     STALE_AFTER_SECONDS, TimeTracker, format_time_summary
 )
 from src.utils import (
-    format_duration, parse_duration, parse_tag_string, pluralize, validate_due_date
+    format_duration, normalize_tag, parse_duration, parse_tag_string, pluralize,
+    validate_due_date
 )
 from datetime import date, timedelta
 
@@ -138,6 +139,20 @@ def build_parser():
         "--blocked", action="store_true",
         help="Only pending tasks waiting on unfinished tasks"
     )
+    due_filter = list_parser.add_mutually_exclusive_group()
+    due_filter.add_argument(
+        "--overdue", action="store_true", help="Only pending tasks past their due date"
+    )
+    due_filter.add_argument(
+        "--due-today", action="store_true", help="Only pending tasks due today"
+    )
+    due_filter.add_argument(
+        "--due-within", type=non_negative_int, metavar="DAYS",
+        help="Only pending tasks due from today up to DAYS days ahead"
+    )
+    due_filter.add_argument(
+        "--no-due-date", action="store_true", help="Only pending tasks with no due date"
+    )
     list_parser.add_argument(
         "--sort",
         choices=["title", "priority", "category", "created_at", "due_date"],
@@ -185,6 +200,20 @@ def build_parser():
     tag_remove.add_argument("tags", help="Comma-separated tags")
 
     tag_commands.add_parser("list", help="List all tags with task counts")
+
+    tag_rename = tag_commands.add_parser("rename", help="Rename a tag on every task")
+    tag_rename.add_argument("old")
+    tag_rename.add_argument("new")
+
+    tag_merge = tag_commands.add_parser(
+        "merge", help="Move every task from one tag to another and remove the first"
+    )
+    tag_merge.add_argument("source")
+    tag_merge.add_argument("target")
+
+    tag_delete = tag_commands.add_parser("delete", help="Remove a tag from every task")
+    tag_delete.add_argument("tag")
+    tag_delete.add_argument("-y", "--yes", action="store_true", help="Delete without asking")
 
     goal = commands.add_parser("goal", help="Manage daily and weekly goals")
     goal_commands = goal.add_subparsers(dest="goal_command", required=True)
@@ -1188,18 +1217,21 @@ def handle_tags(manager, args):
 
         if not counts:
             print("No tags found.")
-            return
+            return 0
 
         for name, total in counts.items():
             print(f"#{name} ({total})")
-        return
+        return 0
+
+    if args.tag_command in ("rename", "merge", "delete"):
+        return handle_tag_management(manager, args)
 
     try:
         tags = parse_tag_string(args.tags)
 
         if not tags:
             print("Provide at least one tag.")
-            return
+            return 1
 
         if args.tag_command == "add":
             task = manager.add_tags(args.task_id, tags)
@@ -1207,14 +1239,50 @@ def handle_tags(manager, args):
             task = manager.remove_tags(args.task_id, tags)
     except ValueError as error:
         print(error)
-        return
+        return 1
 
     if task is None:
         print("Task not found.")
-        return
+        return 1
 
     shown = " ".join(f"#{tag}" for tag in task.tags) or "none"
     print(f"Tags for task {task.task_id}: {shown}")
+    return 0
+
+
+def handle_tag_management(manager, args):
+    try:
+        if args.tag_command == "rename":
+            changed = manager.rename_tag(args.old, args.new)
+            print(f"Renamed #{normalize_tag(args.old)} to #{normalize_tag(args.new)} "
+                  f"on {pluralize(changed, 'task')}.")
+
+        elif args.tag_command == "merge":
+            moved = manager.merge_tags(args.source, args.target)
+            print(f"Merged #{normalize_tag(args.source)} into #{normalize_tag(args.target)} "
+                  f"({pluralize(moved, 'task')}).")
+
+        else:
+            tag = normalize_tag(args.tag)
+            total = manager.get_all_tags().get(tag)
+
+            if total is None:
+                print(f"Tag '{tag}' not found.")
+                return 1
+
+            if not args.yes and not confirm(
+                f"Remove #{tag} from {pluralize(total, 'task')}?"
+            ):
+                print("Cancelled. Nothing was changed.")
+                return 0
+
+            manager.delete_tag(tag)
+            print(f"Removed #{tag} from {pluralize(total, 'task')}.")
+    except ValueError as error:
+        print(error)
+        return 1
+
+    return 0
 
 
 def display_journal_entry(entry):
@@ -1379,8 +1447,7 @@ def _run(argv=None):
     
 
     if args.command == "tag":
-        handle_tags(manager, args)
-        return
+        return handle_tags(manager, args)
 
     if args.command == "export":
         handle_export(manager, args)
@@ -1472,6 +1539,15 @@ def _run(argv=None):
         except ValueError as error:
             print(error)
             return
+
+        if args.overdue:
+            tasks = filter_by_due(tasks, "overdue")
+        elif args.due_today:
+            tasks = filter_by_due(tasks, "today")
+        elif args.due_within is not None:
+            tasks = filter_by_due(tasks, "within", days=args.due_within)
+        elif args.no_due_date:
+            tasks = filter_by_due(tasks, "none")
 
         if args.ready or args.blocked:
             blocked_ids = set(DependencyManager(manager.database).get_blocker_map())
