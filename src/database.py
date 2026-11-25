@@ -406,6 +406,29 @@ class Database:
             ).fetchall()
         return {row["task_id"]: row["total"] for row in rows}
 
+    def merge_tags(self, source: str, target: str) -> int:
+        """Move every task from tag `source` to tag `target`, then drop `source`.
+
+        Tasks that already have both tags simply end up with `target` once.
+        Returns how many tasks had `source`.
+        """
+        with self._connect() as connection:
+            moved = connection.execute(
+                "SELECT COUNT(*) FROM task_tags WHERE tag = ?", (source,)
+            ).fetchone()[0]
+            connection.execute(
+                "INSERT OR IGNORE INTO task_tags (task_id, tag) "
+                "SELECT task_id, ? FROM task_tags WHERE tag = ?", (target, source)
+            )
+            connection.execute("DELETE FROM task_tags WHERE tag = ?", (source,))
+        return moved
+
+    def delete_tag(self, tag: str) -> int:
+        """Remove a tag from every task. Returns how many tasks had it."""
+        with self._connect() as connection:
+            cursor = connection.execute("DELETE FROM task_tags WHERE tag = ?", (tag,))
+        return cursor.rowcount
+
     def get_tag_counts(self) -> Dict[str, int]:
         """Return {tag: number_of_tasks}, sorted by tag name."""
         with self._connect() as connection:
