@@ -122,6 +122,11 @@ tracker add "Fix login bug" --priority medium --category work --tags bugfix
 tracker list                                  # newest first
 tracker list --status pending --sort due_date --ascending
 tracker list --search login --tag work        # --tag can be repeated
+tracker list --overdue                        # pending tasks past their due date
+tracker list --due-today
+tracker list --due-within 7                   # due in the next 7 days
+tracker list --no-due-date
+tracker list --json                           # machine-readable output (also: show 3 --json, today --json)
 tracker show 2                                # full details of one task
 tracker edit 2 --priority high --due-date 2026-12-05
 tracker edit 2 --clear-due-date
@@ -181,6 +186,9 @@ tracker add "Write docs" --tags docs,work
 tracker tag add 1 urgent
 tracker tag remove 1 urgent
 tracker tag list                              # every tag with its task count
+tracker tag rename bug defect                 # rename on every task
+tracker tag merge fix bugfix                  # move all tasks from one tag to another
+tracker tag delete old-tag                    # asks first; add --yes to skip
 tracker list --tag docs
 ```
 
@@ -264,9 +272,10 @@ tracker export --include-time                 # adds a time_spent_seconds column
 
 tracker import tasks.csv --dry-run            # check the file without saving
 tracker import tasks.csv
+tracker import tasks.json                     # JSON files work too (round-trips with export)
 ```
 
-- Only a `title` column is required to import. Optional columns are `description`,
+- Only a `title` column (or key, in JSON) is required to import. Optional columns are `description`,
   `priority`, `category`, `due_date`, `completed` (yes/no), `recurrence` and `tags` (separated by `;` or `,`).
 - Files made by `export` can be imported again.
 - Invalid rows are skipped and reported by line number. Tasks that already exist
